@@ -213,7 +213,15 @@ function render(data) {
     </tr>`;
   }).join("");
 
-  // 建议
+  // 缺失点 / 问题点 / 风险点
+  renderFindings("missing", data.missing);
+  renderFindings("problems", data.problems);
+  renderFindings("risks", data.risks);
+
+  // 识别过程：各 OCR 原文 + 评价
+  renderOcr(data);
+
+  // 兼容旧版 suggestions（新版用 missing/problems/risks，一般为空）
   const sugg = Array.isArray(data.suggestions) ? data.suggestions.filter(Boolean) : [];
   const sbox = $("suggBox");
   if (sugg.length) {
@@ -225,6 +233,56 @@ function render(data) {
 
   reportEl.hidden = false;
   reportEl.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+const LEVEL_LABEL = { high: "高", medium: "中", low: "低" };
+
+// 渲染 缺失/问题/风险 列表（结构相同：item + detail + basis + suggestion[+level]）
+function renderFindings(kind, list) {
+  const box = $(kind + "Box");
+  const ul = $(kind + "List");
+  const arr = Array.isArray(list) ? list : [];
+  $(kind + "Count").textContent = arr.length;
+  if (!arr.length) {
+    ul.innerHTML = `<li class="empty">未发现。</li>`;
+    return;
+  }
+  ul.innerHTML = arr.map((x) => {
+    const lvl = x.level ? `<span class="lvl lvl-${esc(x.level)}">${LEVEL_LABEL[x.level] || esc(x.level)}风险</span>` : "";
+    const basis = x.basis ? `<span class="basis">依据：${esc(x.basis)}</span>` : "";
+    const sug = x.suggestion ? `<div class="sug">整改建议：${esc(x.suggestion)}</div>` : "";
+    return `<li>
+      <div class="fh">${lvl}<strong>${esc(x.item || "")}</strong></div>
+      <div class="fd">${esc(x.detail || "")}</div>
+      ${basis}${sug}
+    </li>`;
+  }).join("");
+}
+
+// 渲染 OCR 识别过程：各模型原文 + R1 评价分数
+function renderOcr(data) {
+  const box = $("ocrBox");
+  const results = Array.isArray(data.ocr_results) ? data.ocr_results : [];
+  if (!results.length) { box.hidden = true; return; }
+  const evals = (data.ocr_evaluation && data.ocr_evaluation.evaluations) || [];
+  const scoreOf = (m) => {
+    const e = evals.find((x) => x.model === m);
+    return e && (e.score != null) ? e.score : null;
+  };
+  const wrap = $("ocrResults");
+  wrap.innerHTML = results.map((r) => {
+    const name = r.model.split("/").pop();
+    const sc = scoreOf(r.model);
+    const badge = sc != null ? `<span class="score">可信度 ${esc(sc)}</span>` : "";
+    const body = r.error
+      ? `<div class="ocr-err">识别失败：${esc(r.error)}</div>`
+      : `<pre>${esc(r.text || "(无输出)")}</pre>`;
+    return `<div class="ocr-one"><div class="ocr-h">${esc(name)}${badge}</div>${body}</div>`;
+  }).join("");
+  const conf = data.ocr_evaluation && data.ocr_evaluation.confidence;
+  $("mergedText").textContent = data.merged_text || "";
+  $("ocrConf").textContent = conf != null ? `融合可信度 ${conf}` : "";
+  box.hidden = false;
 }
 
 // 顶部显示当前依据的标准

@@ -73,7 +73,12 @@ def _rate_limited(ip: str) -> bool:
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"ok": True, "model": llm.LLM_MODEL, "standards": STANDARDS}
+    return {
+        "ok": True,
+        "ocr_models": llm.OCR_MODELS,
+        "reason_model": llm.REASON_MODEL,
+        "standards": STANDARDS,
+    }
 
 
 @app.get("/api/checklist")

@@ -58,14 +58,39 @@
         <table class="checks" id="checks"></table>
       </div>
 
+      <div class="card findings missing" id="missingBox">
+        <h2>缺失点 <span class="cnt" id="missingCount">0</span></h2>
+        <p class="fdesc">强制标示内容缺失（应标而未标）。</p>
+        <ul class="flist" id="missingList"></ul>
+      </div>
+
+      <div class="card findings problems" id="problemsBox">
+        <h2>问题点 <span class="cnt" id="problemsCount">0</span></h2>
+        <p class="fdesc">已标示但不规范、不符合标准条款要求。</p>
+        <ul class="flist" id="problemsList"></ul>
+      </div>
+
+      <div class="card findings risks" id="risksBox">
+        <h2>风险点 <span class="cnt" id="risksCount">0</span></h2>
+        <p class="fdesc">可能引发监管处罚或误导消费者的隐患。</p>
+        <ul class="flist" id="risksList"></ul>
+      </div>
+
       <div class="card" id="suggBox" hidden>
         <h2>整改建议</h2>
         <ul id="suggestions"></ul>
       </div>
 
-      <p class="disclaimer">本结果由人工智能识读图片后对照国家标准自动生成，仅供参考，
-        不构成官方监管结论或法律意见。最终以监管部门与标准原文为准。
-        相关标准 2027-03-16 正式实施。</p>
+      <details class="card ocr" id="ocrBox" hidden>
+        <summary>识别过程（多模型 OCR 与质量评价）<span class="conf" id="ocrConf"></span></summary>
+        <div id="ocrResults"></div>
+        <h3>融合后用于比对的文本</h3>
+        <pre id="mergedText" class="merged"></pre>
+      </details>
+
+      <p class="disclaimer">本结果由 PaddleOCR-VL 与 DeepSeek-OCR 双模型识图、
+        DeepSeek-R1 评价并对照国家标准自动生成，仅供参考，不构成官方监管结论或法律意见。
+        最终以监管部门与标准原文为准。相关标准 2027-03-16 正式实施。</p>
     </section>
   </main>
 

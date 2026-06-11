@@ -156,6 +156,45 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 #suggestions { margin: 0; padding-left: 20px; }
 #suggestions li { margin: 5px 0; }
 
+/* 缺失 / 问题 / 风险 三类发现 */
+.findings h2 .cnt {
+  display: inline-block; min-width: 22px; padding: 0 7px; margin-left: 6px;
+  font-size: 13px; line-height: 20px; text-align: center;
+  border-radius: 999px; color: #fff; vertical-align: middle;
+}
+.findings.missing { border-left: 4px solid var(--fail); }
+.findings.problems { border-left: 4px solid var(--warn); }
+.findings.risks { border-left: 4px solid #b4519b; }
+.findings.missing h2 .cnt { background: var(--fail); }
+.findings.problems h2 .cnt { background: var(--warn); }
+.findings.risks h2 .cnt { background: #b4519b; }
+.fdesc { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+.flist { list-style: none; margin: 0; padding: 0; }
+.flist li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.flist li:last-child { border-bottom: none; }
+.flist li.empty { color: var(--muted); border: none; padding: 4px 0; }
+.flist .fh { font-size: 14.5px; }
+.flist .fd { margin-top: 3px; font-size: 13.5px; }
+.flist .basis { display: inline-block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.flist .sug { margin-top: 4px; font-size: 13px; color: var(--brand-d); }
+.lvl { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: #fff; margin-right: 6px; }
+.lvl-high { background: var(--fail); }
+.lvl-medium { background: var(--warn); }
+.lvl-low { background: var(--na); }
+
+/* 识别过程（OCR 折叠区） */
+.ocr summary { cursor: pointer; font-size: 16px; font-weight: 600; }
+.ocr summary .conf { float: right; font-size: 12px; font-weight: 400; color: var(--muted); }
+.ocr-one { margin: 12px 0; }
+.ocr-h { font-weight: 600; font-size: 13.5px; margin-bottom: 4px; }
+.ocr-h .score { float: right; font-weight: 400; color: var(--muted); font-size: 12px; }
+.ocr pre, pre.merged {
+  white-space: pre-wrap; word-break: break-word; background: #f7f8fa;
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  font-size: 13px; margin: 0; max-height: 260px; overflow: auto;
+}
+.ocr-err { color: var(--fail); font-size: 13px; }
+
 .disclaimer { color: var(--muted); font-size: 12px; margin-top: 8px; }
 
 @media (max-width: 560px) {
