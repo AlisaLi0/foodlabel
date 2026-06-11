@@ -133,25 +133,48 @@ resetBtn.addEventListener("click", () => {
   renderThumbs();
   reportEl.hidden = true;
   statusEl.hidden = true;
+  resetSteps();
 });
+
+// 步骤进度条控制
+const STEP_LABELS = { 1: "识别图片", 2: "识读内容", 3: "对照国标", 4: "生成报告" };
+function setStep(n, state) {
+  // state: active | done。点亮第 n 步，并把之前的步标记为 done。
+  const stepsEl = $("steps");
+  stepsEl.hidden = false;
+  stepsEl.querySelectorAll(".step").forEach((el) => {
+    const s = Number(el.dataset.step);
+    el.classList.remove("active", "done");
+    if (s < n) el.classList.add("done");
+    else if (s === n) el.classList.add(state === "done" ? "done" : "active");
+  });
+}
+function resetSteps() {
+  const stepsEl = $("steps");
+  stepsEl.hidden = true;
+  stepsEl.querySelectorAll(".step").forEach((el) => el.classList.remove("active", "done"));
+}
 
 runBtn.addEventListener("click", async () => {
   if (!files.length) return;
   runBtn.disabled = true;
   reportEl.hidden = true;
-  statusEl.hidden = false;
-  statusEl.className = "status";
-  statusEl.innerHTML = `<div class="spinner"></div><div>正在识读图片并对照国家标准检查，请稍候…</div>`;
+  statusEl.hidden = true;
+  resetSteps();
+  // 预清空报告各区，准备逐步填充
+  clearReport();
 
   const fd = new FormData();
   files.forEach((f) => fd.append("images", f.file, f.file.name));
 
   try {
-    const resp = await fetch(api("api/check"), { method: "POST", body: fd });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || `请求失败 (${resp.status})`);
-    statusEl.hidden = true;
-    render(data);
+    const resp = await fetch(api("api/check/stream"), { method: "POST", body: fd });
+    if (!resp.ok || !resp.body) {
+      let msg = `请求失败 (${resp.status})`;
+      try { msg = (await resp.json()).error || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+    await consumeSSE(resp.body, onStepEvent);
   } catch (err) {
     statusEl.hidden = false;
     statusEl.className = "status err";
@@ -161,17 +184,89 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
-function render(data) {
-  const summary = data.summary || {};
-  const verdict = summary.verdict || "issues";
-  const v = $("verdict");
-  v.className = "verdict v-" + verdict;
-  let score = "";
-  if (typeof summary.score === "number") score = `<span class="score">合规评分 ${summary.score}/100</span>`;
-  const counts = `符合 ${summary.pass || 0} · 不符合 ${summary.fail || 0} · 需复核 ${summary.warn || 0}`;
-  v.innerHTML = `${score}${esc(VERDICT_LABEL[verdict] || verdict)}<div class="sub" style="font-weight:400;font-size:13px;margin-top:4px;">${counts}</div>`;
+// 读取 SSE 流，逐行解析 `data: {...}` 事件
+async function consumeSSE(stream, onEvent) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      const line = chunk.split("\n").find((l) => l.startsWith("data:"));
+      if (!line) continue;
+      try { onEvent(JSON.parse(line.slice(5).trim())); } catch (e) {}
+    }
+  }
+}
 
-  // 识读字段
+// 处理每个阶段事件：点亮进度条 + 逐步渲染
+function onStepEvent(ev) {
+  if (ev.stage === "error") {
+    statusEl.hidden = false;
+    statusEl.className = "status err";
+    statusEl.textContent = "出错了：" + (ev.error || "未知错误");
+    return;
+  }
+  const step = ev.step || 0;
+  if (ev.status === "started") {
+    setStep(step, "active");
+    return;
+  }
+  if (ev.status !== "done") return;
+
+  if (ev.stage === "extract") {
+    // 第 2 步完成：先展示识读字段 + 营养表
+    setStep(2, "done");
+    reportEl.hidden = false;
+    renderExtracted(ev);
+    reportEl.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (ev.stage === "ocr") {
+    setStep(1, "done");
+    if (Array.isArray(ev.ocr_results)) renderOcr({ ocr_results: ev.ocr_results, ocr_evaluation: {} });
+  } else if (ev.stage === "rules") {
+    // 第 3 步完成：展示适用规则（食品类目 + 各项适用/豁免）
+    setStep(3, "done");
+    reportEl.hidden = false;
+    renderRules(ev.rules || {});
+  } else if (ev.stage === "done") {
+    // 第 5 步完成：渲染完整合规结论
+    setStep(5, "done");
+    const data = ev.result || {};
+    renderExtracted(data);
+    if (data.rules) renderRules(data.rules);
+    renderVerdict(data);
+    renderChecks(data);
+    renderFindings("missing", data.missing);
+    renderFindings("problems", data.problems);
+    renderFindings("risks", data.risks);
+    renderOcr(data);
+    reportEl.hidden = false;
+  }
+}
+
+// 清空报告各区，准备逐步填充
+function clearReport() {
+  $("verdict").innerHTML = "";
+  $("verdict").className = "verdict";
+  $("extracted").innerHTML = "";
+  $("nutriWrap").hidden = true;
+  $("rulesBox").hidden = true;
+  $("checks").innerHTML = "";
+  ["missing", "problems", "risks"].forEach((k) => {
+    $(k + "List").innerHTML = "";
+    $(k + "Count").textContent = "0";
+  });
+  $("suggBox").hidden = true;
+  $("ocrBox").hidden = true;
+}
+
+// 渲染识读字段 + 营养成分表（步骤2完成即可显示）
+function renderExtracted(data) {
   const ex = data.extracted || {};
   const kv = $("extracted");
   kv.innerHTML = "";
@@ -185,8 +280,6 @@ function render(data) {
   if (!kv.children.length) {
     kv.innerHTML = `<tr><td class="k">—</td><td>未识读到结构化字段。</td></tr>`;
   }
-
-  // 营养成分表
   const nt = Array.isArray(ex.nutrition_table) ? ex.nutrition_table : [];
   const wrap = $("nutriWrap");
   const ntbl = $("nutrition");
@@ -197,8 +290,39 @@ function render(data) {
   } else {
     wrap.hidden = true;
   }
+}
 
-  // 检查项
+// 渲染适用规则（食品类目 + 各检查项适用/豁免）
+function renderRules(rules) {
+  if (!rules || !rules.category_name) { $("rulesBox").hidden = true; return; }
+  const imp = rules.is_import ? " \u00b7 \u8fdb\u53e3\u98df\u54c1" : "";
+  $("rulesCat").textContent = rules.category_name + (rules.category_basis ? "\uff08" + rules.category_basis + "\uff09" : "") + imp;
+  $("rulesReason").textContent = rules.category_reason || "";
+  const list = Array.isArray(rules.applicable) ? rules.applicable : [];
+  $("rulesTable").innerHTML = list.map((a) => {
+    const ok = a.applicable;
+    const tag = ok
+      ? `<span class="b pass">\u9002\u7528</span>`
+      : `<span class="b na">\u8c41\u514d</span>`;
+    return `<tr><td class="st">${tag}</td><td class="it">${esc(a.item)}</td><td>${esc(a.reason || "")}</td></tr>`;
+  }).join("");
+  $("rulesBox").hidden = false;
+}
+
+// 渲染合规结论卡片
+function renderVerdict(data) {
+  const summary = data.summary || {};
+  const verdict = summary.verdict || "issues";
+  const v = $("verdict");
+  v.className = "verdict v-" + verdict;
+  let score = "";
+  if (typeof summary.score === "number") score = `<span class="score">合规评分 ${summary.score}/100</span>`;
+  const counts = `符合 ${summary.pass || 0} · 不符合 ${summary.fail || 0} · 需复核 ${summary.warn || 0}`;
+  v.innerHTML = `${score}${esc(VERDICT_LABEL[verdict] || verdict)}<div class="sub" style="font-weight:400;font-size:13px;margin-top:4px;">${counts}</div>`;
+}
+
+// 渲染合规检查表
+function renderChecks(data) {
   const checks = Array.isArray(data.checks) ? data.checks : [];
   const order = { fail: 0, warn: 1, unknown: 2, pass: 3, na: 4 };
   checks.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
@@ -213,27 +337,6 @@ function render(data) {
       <td>${esc(c.finding || "")}</td>
     </tr>`;
   }).join("");
-
-  // 缺失点 / 问题点 / 风险点
-  renderFindings("missing", data.missing);
-  renderFindings("problems", data.problems);
-  renderFindings("risks", data.risks);
-
-  // 识别过程：各 OCR 原文 + 评价
-  renderOcr(data);
-
-  // 兼容旧版 suggestions（新版用 missing/problems/risks，一般为空）
-  const sugg = Array.isArray(data.suggestions) ? data.suggestions.filter(Boolean) : [];
-  const sbox = $("suggBox");
-  if (sugg.length) {
-    $("suggestions").innerHTML = sugg.map((s) => `<li>${esc(s)}</li>`).join("");
-    sbox.hidden = false;
-  } else {
-    sbox.hidden = true;
-  }
-
-  reportEl.hidden = false;
-  reportEl.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 const LEVEL_LABEL = { high: "高", medium: "中", low: "低" };

@@ -14,12 +14,13 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections import deque
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 # request.form() 返回 starlette 的 UploadFile；fastapi.UploadFile 是其子类，
@@ -93,18 +94,7 @@ async def check(request: Request) -> JSONResponse:
     if _rate_limited(ip):
         return JSONResponse({"error": "请求过于频繁，请稍后再试。"}, status_code=429)
 
-    form = await request.form()
-    uploads = [v for v in form.getlist("images") if isinstance(v, UploadFile)]
-    if not uploads:
-        single = form.get("image")
-        if isinstance(single, UploadFile):
-            uploads = [single]
-
-    items: list[tuple[bytes, str | None]] = []
-    for up in uploads:
-        raw = await up.read()
-        items.append((raw, (up.content_type or "").lower() or None))
-
+    items = await _read_uploads(request)
     try:
         result = await core.check_image_bytes(
             items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES
@@ -115,6 +105,55 @@ async def check(request: Request) -> JSONResponse:
         return JSONResponse({"error": f"识别失败：{e}"}, status_code=502)
 
     return JSONResponse(result)
+
+
+async def _read_uploads(request: Request) -> list[tuple[bytes, str | None]]:
+    form = await request.form()
+    uploads = [v for v in form.getlist("images") if isinstance(v, UploadFile)]
+    if not uploads:
+        single = form.get("image")
+        if isinstance(single, UploadFile):
+            uploads = [single]
+    items: list[tuple[bytes, str | None]] = []
+    for up in uploads:
+        raw = await up.read()
+        items.append((raw, (up.content_type or "").lower() or None))
+    return items
+
+
+@app.post("/api/check/stream")
+async def check_stream(request: Request):
+    """分步流式检查：SSE 逐步推送 识别→识读→对照国标→完成 各阶段事件。
+
+    每个事件是一行 `data: <json>\\n\\n`，前端据 step/stage/status 点亮进度条、逐步渲染。
+    """
+    ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
+    if _rate_limited(ip):
+        return JSONResponse({"error": "请求过于频繁，请稍后再试。"}, status_code=429)
+
+    items = await _read_uploads(request)
+    try:
+        data_urls = core.prepare_items(items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES)
+    except core.InputError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    async def gen():
+        def sse(obj: dict) -> bytes:
+            return ("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode("utf-8")
+
+        try:
+            async for ev in core.analyze_steps(data_urls):
+                yield sse(ev)
+        except llm.LLMError as e:
+            yield sse({"stage": "error", "status": "error", "error": f"识别失败：{e}"})
+        except Exception as e:  # 兜底，避免连接悬挂
+            yield sse({"stage": "error", "status": "error", "error": f"服务异常：{e}"})
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # 同源托管静态前端（挂在最后，避免吞掉 /api/*）。前后端分离纯 API 部署可设 FOODLABEL_SERVE_WEB=0。

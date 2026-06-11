@@ -34,6 +34,19 @@
 
     <section id="status" class="status" hidden></section>
 
+    <!-- 步骤进度条：识别 → 识读 → 判定适用规则 → 合规评价 → 报告，逐步点亮 -->
+    <section id="steps" class="steps" hidden>
+      <div class="step" data-step="1"><span class="dot">1</span><span class="lbl">识别图片</span></div>
+      <div class="bar"></div>
+      <div class="step" data-step="2"><span class="dot">2</span><span class="lbl">识读内容</span></div>
+      <div class="bar"></div>
+      <div class="step" data-step="3"><span class="dot">3</span><span class="lbl">判定适用规则</span></div>
+      <div class="bar"></div>
+      <div class="step" data-step="4"><span class="dot">4</span><span class="lbl">合规评价</span></div>
+      <div class="bar"></div>
+      <div class="step" data-step="5"><span class="dot">5</span><span class="lbl">生成报告</span></div>
+    </section>
+
     <section id="report" class="report" hidden>
       <div id="verdict" class="verdict"></div>
 
@@ -44,6 +57,12 @@
           <h3>营养成分表</h3>
           <table class="nutri" id="nutrition"></table>
         </div>
+      </div>
+
+      <div class="card" id="rulesBox" hidden>
+        <h2>适用规则 <span class="cat" id="rulesCat"></span></h2>
+        <p class="fdesc" id="rulesReason"></p>
+        <table class="rules" id="rulesTable"></table>
       </div>
 
       <div class="card">
