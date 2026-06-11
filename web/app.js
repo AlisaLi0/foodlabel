@@ -1,6 +1,18 @@
 /* 标签识别 前端逻辑：选图/拖拽/粘贴 → POST /api/check → 渲染合规报告 */
 "use strict";
 
+// 后端 API base。前后端分离：前端可单独部署，指向任意后端。解析顺序：
+//   1. window.FOODLABEL_API_BASE（index.html 内联设置）
+//   2. <meta name="foodlabel-api-base" content="https://...">
+//   3. ""（同源，相对 <base href> 解析为 /biaoqianshibie/api/*）
+const API_BASE = (
+  (typeof window !== "undefined" && window.FOODLABEL_API_BASE) ||
+  document.querySelector('meta[name="foodlabel-api-base"]')?.content ||
+  ""
+).replace(/\/$/, "");
+const api = (path) =>
+  API_BASE ? `${API_BASE}/${path.replace(/^\//, "")}` : path;
+
 const $ = (id) => document.getElementById(id);
 const fileInput = $("file");
 const thumbs = $("thumbs");
@@ -108,7 +120,7 @@ runBtn.addEventListener("click", async () => {
   files.forEach((f) => fd.append("images", f.file, f.file.name));
 
   try {
-    const resp = await fetch("api/check", { method: "POST", body: fd });
+    const resp = await fetch(api("api/check"), { method: "POST", body: fd });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || `请求失败 (${resp.status})`);
     statusEl.hidden = true;
@@ -189,6 +201,6 @@ function render(data) {
 }
 
 // 顶部显示当前依据的标准
-fetch("api/health").then((r) => r.json()).then((d) => {
+fetch(api("api/health")).then((r) => r.json()).then((d) => {
   if (d.standards) $("standards").textContent = d.standards;
 }).catch(() => {});

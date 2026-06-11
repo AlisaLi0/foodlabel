@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
@@ -22,8 +23,14 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://tianshu-gateway.cloud/v1").rst
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "OpenAI/GPT-5.5")
 _TIMEOUT = float(os.getenv("LLM_TIMEOUT", "120"))
+# 推理型模型（如 GPT-5.5）不接受自定义 temperature，传了会返回 500。
+# 默认不传；只有显式设了 LLM_TEMPERATURE（给非推理型模型用）才加上。
+_TEMPERATURE = os.getenv("LLM_TEMPERATURE", "").strip()
 # 图片送模型前的长边上限（像素），控制 token 成本；0 关闭缩放。
 _MAX_EDGE = int(os.getenv("LLM_IMAGE_MAX_EDGE", "1600"))
+# 5xx / 超时重试次数与退避（秒）。推理型网关偶发 500。
+_RETRIES = int(os.getenv("LLM_RETRIES", "2"))
+_RETRY_BACKOFF = float(os.getenv("LLM_RETRY_BACKOFF", "2"))
 
 
 class LLMError(RuntimeError):
@@ -60,7 +67,7 @@ def prepare_image(raw: bytes, content_type: str | None = None) -> str:
     return f"data:{mime};base64,{b64}"
 
 
-async def analyze(images: list[str], system: str, *, max_tokens: int = 2200) -> dict:
+async def analyze(images: list[str], system: str, *, max_tokens: int = 6000) -> dict:
     """把若干张图片（data URL）与系统提示词发给视觉模型，返回解析后的 JSON。"""
     content: list[dict] = [
         {
@@ -77,25 +84,44 @@ async def analyze(images: list[str], system: str, *, max_tokens: int = 2200) -> 
             {"role": "system", "content": system},
             {"role": "user", "content": content},
         ],
-        "temperature": 0.1,
         "max_tokens": max_tokens,
         "response_format": {"type": "json_object"},
     }
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(
-                f"{LLM_BASE_URL}/chat/completions", headers=_headers(), json=payload
-            )
-            resp.raise_for_status()
-            msg = resp.json()["choices"][0]["message"]
-            text = msg.get("content") or msg.get("reasoning_content") or ""
-    except httpx.HTTPStatusError as e:
-        body = e.response.text[:300] if e.response is not None else ""
-        raise LLMError(f"模型返回错误 {e.response.status_code}: {body}") from e
-    except (httpx.HTTPError, KeyError, IndexError) as e:
-        raise LLMError(f"无法连接或解析模型响应: {e}") from e
+    # 仅在显式配置时才传 temperature（避免 GPT-5.5 等推理型模型返回 500）。
+    if _TEMPERATURE:
+        try:
+            payload["temperature"] = float(_TEMPERATURE)
+        except ValueError:
+            pass
 
-    return _parse_json(text)
+    # 推理型网关（如 GPT-5.5）偶发 5xx / 超时，做有限次重试提升稳定性。
+    last_err: Exception | None = None
+    for attempt in range(_RETRIES + 1):
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.post(
+                    f"{LLM_BASE_URL}/chat/completions", headers=_headers(), json=payload
+                )
+                resp.raise_for_status()
+                msg = resp.json()["choices"][0]["message"]
+                text = msg.get("content") or msg.get("reasoning_content") or ""
+            return _parse_json(text)
+        except httpx.HTTPStatusError as e:
+            code = e.response.status_code if e.response is not None else 0
+            body = e.response.text[:300] if e.response is not None else ""
+            last_err = LLMError(f"模型返回错误 {code}: {body}")
+            # 仅对 5xx / 429 重试；4xx（除 429）是请求本身的问题，直接抛。
+            if code not in (429, 500, 502, 503, 504):
+                raise last_err from e
+        except (httpx.HTTPError, KeyError, IndexError) as e:
+            last_err = LLMError(f"无法连接或解析模型响应: {e}")
+        except LLMError as e:
+            # _parse_json 解析失败：可能是被截断的偶发输出，重试一次也无妨。
+            last_err = e
+        if attempt < _RETRIES:
+            await asyncio.sleep(_RETRY_BACKOFF * (attempt + 1))
+
+    raise last_err or LLMError("模型调用失败")
 
 
 def _parse_json(text: str) -> dict:

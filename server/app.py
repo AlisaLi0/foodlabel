@@ -1,10 +1,16 @@
-"""biaoqianshibie 后端 — 食品标签国标合规检查.
+"""biaoqianshibie 后端 API — 食品标签国标合规检查.
 
-上传食品标签图片 → 视觉大模型识读 → 对照 GB 7718-2025 / GB 28050-2025
-强制项逐条判定 → 返回结构化合规报告。
+纯 JSON API（前后端分离，参照 JuriCodex）：
+  POST /api/check      上传标签图片 → 返回结构化合规报告
+  GET  /api/checklist  返回检查清单与标准依据
+  GET  /api/health     健康检查
+核心识读/判定逻辑在 server/core.py（框架无关，供 MCP server 复用）。
 
-同源部署：本服务在 127.0.0.1:8610 上同时提供静态前端与 /api/* 接口。
-线上经 nginx 反代到 https://docs-tools.online/biaoqianshibie/（HTTP Basic Auth 加锁）。
+前端是独立的静态资源（web/），通过可配置的 API base 调用本 API；为方便起见，
+本服务也可同源托管该静态前端（FOODLABEL_SERVE_WEB）。CORS 由 FOODLABEL_CORS_ORIGINS
+控制，允许前端单独部署在其他源。
+
+生产同源部署：nginx 反代到 https://docs-tools.online/biaoqianshibie/（Basic Auth 加锁）。
 """
 from __future__ import annotations
 
@@ -12,29 +18,44 @@ import os
 import time
 from collections import deque
 
-from fastapi import FastAPI, Request, UploadFile
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+# request.form() 返回 starlette 的 UploadFile；fastapi.UploadFile 是其子类，
+# isinstance 判定要用 starlette 的基类，否则恒为 False。
+from starlette.datastructures import UploadFile
 
-from . import llm
-from .standards import CHECKLIST, STANDARDS, system_prompt
+from . import core, llm
+from .standards import CHECKLIST, STANDARDS
 
 HOST = os.getenv("FOODLABEL_HOST", "127.0.0.1")
 PORT = int(os.getenv("FOODLABEL_PORT", "8610"))
 WEB_DIR = os.getenv(
     "FOODLABEL_WEB_DIR", os.path.join(os.path.dirname(__file__), "..", "web")
 )
-# 每次最多接受的图片数量与单图大小（字节）。
-MAX_IMAGES = int(os.getenv("FOODLABEL_MAX_IMAGES", "4"))
-MAX_IMAGE_BYTES = int(os.getenv("FOODLABEL_MAX_IMAGE_BYTES", str(8 * 1024 * 1024)))
+# 是否同源托管静态前端（前后端分离时可设 0，仅跑纯 API）。
+SERVE_WEB = os.getenv("FOODLABEL_SERVE_WEB", "1") != "0"
+# 跨源前端允许的来源（逗号分隔；"*" 放行任意源）。默认 "*"：API 由 nginx Basic Auth 保护。
+CORS_ORIGINS = os.getenv("FOODLABEL_CORS_ORIGINS", "*")
+MAX_IMAGES = int(os.getenv("FOODLABEL_MAX_IMAGES", str(core.DEFAULT_MAX_IMAGES)))
+MAX_IMAGE_BYTES = int(os.getenv("FOODLABEL_MAX_IMAGE_BYTES", str(core.DEFAULT_MAX_BYTES)))
 # 每 IP 每小时检查次数上限，保护上游网关配额。0 关闭。
 CHECK_MAX_PER_HOUR = int(os.getenv("FOODLABEL_MAX_PER_HOUR", "60"))
-ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
 
 app = FastAPI(title="biaoqianshibie", docs_url=None, redoc_url=None)
 
+_cors_origins = [o.strip() for o in CORS_ORIGINS.split(",") if o.strip()]
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=_cors_origins != ["*"],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization"],
+    )
+
 _hits: dict[str, deque] = {}
-_CHECK_IDS = [c["id"] for c in CHECKLIST]
 
 
 def _rate_limited(ip: str) -> bool:
@@ -65,9 +86,7 @@ async def checklist() -> dict:
 async def check(request: Request) -> JSONResponse:
     ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
     if _rate_limited(ip):
-        return JSONResponse(
-            {"error": "请求过于频繁，请稍后再试。"}, status_code=429
-        )
+        return JSONResponse({"error": "请求过于频繁，请稍后再试。"}, status_code=429)
 
     form = await request.form()
     uploads = [v for v in form.getlist("images") if isinstance(v, UploadFile)]
@@ -75,94 +94,24 @@ async def check(request: Request) -> JSONResponse:
         single = form.get("image")
         if isinstance(single, UploadFile):
             uploads = [single]
-    if not uploads:
-        return JSONResponse({"error": "请至少上传一张标签图片。"}, status_code=400)
-    if len(uploads) > MAX_IMAGES:
-        return JSONResponse(
-            {"error": f"最多一次上传 {MAX_IMAGES} 张图片。"}, status_code=400
-        )
 
-    data_urls: list[str] = []
+    items: list[tuple[bytes, str | None]] = []
     for up in uploads:
         raw = await up.read()
-        if not raw:
-            continue
-        if len(raw) > MAX_IMAGE_BYTES:
-            return JSONResponse(
-                {"error": f"单张图片不能超过 {MAX_IMAGE_BYTES // (1024*1024)} MB。"},
-                status_code=400,
-            )
-        ctype = (up.content_type or "").lower()
-        if ctype and ctype not in ALLOWED_TYPES:
-            return JSONResponse(
-                {"error": f"不支持的图片格式：{ctype}"}, status_code=400
-            )
-        data_urls.append(llm.prepare_image(raw, ctype or None))
-
-    if not data_urls:
-        return JSONResponse({"error": "上传的图片为空。"}, status_code=400)
+        items.append((raw, (up.content_type or "").lower() or None))
 
     try:
-        result = await llm.analyze(data_urls, system_prompt())
+        result = await core.check_image_bytes(
+            items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES
+        )
+    except core.InputError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     except llm.LLMError as e:
         return JSONResponse({"error": f"识别失败：{e}"}, status_code=502)
 
-    return JSONResponse(_normalize(result))
+    return JSONResponse(result)
 
 
-def _normalize(result: dict) -> dict:
-    """对模型输出做轻量校正：补全计数、保证字段存在，便于前端稳定渲染。"""
-    if not isinstance(result, dict):
-        return {"error": "模型返回格式异常。"}
-    checks = result.get("checks") or []
-    if not isinstance(checks, list):
-        checks = []
-    seen = {c.get("id") for c in checks if isinstance(c, dict)}
-    by_id = {c["id"]: c["item"] for c in CHECKLIST}
-    basis_by_id = {c["id"]: c["basis"] for c in CHECKLIST}
-    cat_by_id = {c["id"]: c["category"] for c in CHECKLIST}
-    # 模型漏判的检查项补成 unknown，保证清单完整。
-    for cid in _CHECK_IDS:
-        if cid not in seen:
-            checks.append(
-                {
-                    "id": cid,
-                    "category": cat_by_id[cid],
-                    "item": by_id[cid],
-                    "status": "unknown",
-                    "finding": "模型未给出该项判定。",
-                    "basis": basis_by_id[cid],
-                }
-            )
-    counts = {"pass": 0, "fail": 0, "warn": 0, "na": 0, "unknown": 0}
-    for c in checks:
-        st = str(c.get("status", "unknown")).lower()
-        if st not in counts:
-            st = "unknown"
-            c["status"] = "unknown"
-        counts[st] += 1
-    result["checks"] = checks
-    summary = result.get("summary") or {}
-    if not isinstance(summary, dict):
-        summary = {}
-    summary.setdefault("pass", counts["pass"])
-    summary.setdefault("fail", counts["fail"])
-    summary.setdefault("warn", counts["warn"])
-    # verdict 缺失时按计数推断。
-    if not summary.get("verdict"):
-        if result.get("is_food_label") is False:
-            summary["verdict"] = "not_a_label"
-        elif counts["fail"]:
-            summary["verdict"] = "non_compliant"
-        elif counts["warn"]:
-            summary["verdict"] = "issues"
-        else:
-            summary["verdict"] = "compliant"
-    result["summary"] = summary
-    result.setdefault("extracted", {})
-    result.setdefault("suggestions", [])
-    return result
-
-
-# 静态前端挂在最后，避免吞掉 /api/*。
-app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
+# 同源托管静态前端（挂在最后，避免吞掉 /api/*）。前后端分离纯 API 部署可设 FOODLABEL_SERVE_WEB=0。
+if SERVE_WEB and os.path.isdir(WEB_DIR):
+    app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
