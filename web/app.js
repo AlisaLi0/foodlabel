@@ -153,6 +153,7 @@ runBtn.addEventListener("click", async () => {
     statusEl.hidden = true;
     render(data);
   } catch (err) {
+    statusEl.hidden = false;
     statusEl.className = "status err";
     statusEl.textContent = "出错了：" + err.message;
   } finally {
