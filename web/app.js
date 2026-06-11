@@ -95,9 +95,36 @@ const drop = $("drop");
   drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("drag"); })
 );
 drop.addEventListener("drop", (e) => { if (e.dataTransfer) addFiles(e.dataTransfer.files); });
+
+// 直接粘贴剪贴板里的图片（截图、网页复制的图片等）。图片通常不在
+// clipboardData.files 里，而是以 blob 形式出现在 clipboardData.items，需用
+// getAsFile() 取出；同时兼容 .files 路径。
 window.addEventListener("paste", (e) => {
-  const items = e.clipboardData && e.clipboardData.files;
-  if (items && items.length) addFiles(items);
+  const cd = e.clipboardData;
+  if (!cd) return;
+  const picked = [];
+  if (cd.items && cd.items.length) {
+    for (const item of cd.items) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const blob = item.getAsFile();
+        if (blob) {
+          // 粘贴的截图往往没有文件名，补一个带扩展名的名字便于后端识别。
+          const ext = (blob.type.split("/")[1] || "png").split("+")[0];
+          const named = blob.name
+            ? blob
+            : new File([blob], `pasted-${Date.now()}.${ext}`, { type: blob.type });
+          picked.push(named);
+        }
+      }
+    }
+  }
+  if (!picked.length && cd.files && cd.files.length) {
+    for (const f of cd.files) if (f.type.startsWith("image/")) picked.push(f);
+  }
+  if (picked.length) {
+    e.preventDefault();
+    addFiles(picked);
+  }
 });
 
 resetBtn.addEventListener("click", () => {
