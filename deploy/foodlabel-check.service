@@ -1,0 +1,14 @@
+[Unit]
+Description=biaoqianshibie backend (food-label GB compliance check)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/foodlabel-check
+EnvironmentFile=/opt/foodlabel-check/foodlabel.env
+ExecStart=/opt/foodlabel-check/venv/bin/python -m uvicorn server.app:app --host 127.0.0.1 --port 8610 --no-access-log
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <!-- 线上挂在 /biaoqianshibie/ 子路径下；本地直接根路径访问时浏览器会忽略到 / 的等价回退。 -->
+  <base href="/biaoqianshibie/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>食品标签合规检查 · 标签识别</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">标签识别 · 食品标签国标合规检查</div>
+    <div class="sub" id="standards">GB 7718-2025 / GB 28050-2025</div>
+  </header>
+
+  <main>
+    <section class="uploader" id="drop">
+      <p class="lead">上传预包装食品的<strong>标签照片</strong>（可一次上传正面、配料面、营养成分面，最多 4 张），
+        自动识读文字并对照现行国家标准逐项判断是否合规。</p>
+      <input type="file" id="file" accept="image/*" multiple hidden />
+      <div class="actions">
+        <button id="pick" class="btn primary">选择图片</button>
+        <button id="run" class="btn" disabled>开始检查</button>
+        <button id="reset" class="btn ghost" hidden>重置</button>
+      </div>
+      <div class="hint">支持 JPG / PNG / WebP，单张 ≤ 8 MB。也可直接把图片拖到此区域或粘贴。</div>
+      <div id="thumbs" class="thumbs"></div>
+    </section>
+
+    <section id="status" class="status" hidden></section>
+
+    <section id="report" class="report" hidden>
+      <div id="verdict" class="verdict"></div>
+
+      <div class="card">
+        <h2>识读到的标签内容</h2>
+        <table class="kv" id="extracted"></table>
+        <div class="nutri-wrap" id="nutriWrap" hidden>
+          <h3>营养成分表</h3>
+          <table class="nutri" id="nutrition"></table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>合规检查（对照国家标准强制项）</h2>
+        <div class="legend">
+          <span class="b pass">符合</span>
+          <span class="b fail">不符合/缺失</span>
+          <span class="b warn">需复核</span>
+          <span class="b na">不适用</span>
+          <span class="b unknown">看不清</span>
+        </div>
+        <table class="checks" id="checks"></table>
+      </div>
+
+      <div class="card" id="suggBox" hidden>
+        <h2>整改建议</h2>
+        <ul id="suggestions"></ul>
+      </div>
+
+      <p class="disclaimer">本结果由人工智能识读图片后对照国家标准自动生成，仅供参考，
+        不构成官方监管结论或法律意见。最终以监管部门与标准原文为准。
+        相关标准 2027-03-16 正式实施。</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
