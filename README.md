@@ -17,9 +17,9 @@
 | 步 | 阶段 | 模型 / 动作 | 实测耗时 | 完成即返回 |
 |---|---|---|---|---|
 | 1 | 识别图片 | DeepSeek-OCR（硅基流动） | ~1–3 s | OCR 文本草稿 |
-| 2 | 识读内容 | Qwen3.6-35B-A3B 视觉（以图为准，OCR 为辅） | ~15–19 s | **识读字段 + 营养成分表** |
-| 3 | 判定适用规则 | Qwen3.6 受限分类 → 代码确定性映射 | ~19 s | **食品类目 + 各项适用/豁免** |
-| 4 | 合规评价 | Qwen3.6 基于适用规则逐条对照国标 | ~110–130 s | **缺失/问题/风险点** |
+| 2 | 识读内容 | Qwen3-8B 据 OCR 文本识读结构化字段 | ~15–20 s | **识读字段 + 营养成分表** |
+| 3 | 判定适用规则 | Qwen3-8B 受限分类 → 代码确定性映射 | ~15–20 s | **食品类目 + 各项适用/豁免** |
+| 4 | 合规评价 | Qwen3-8B 基于适用规则逐条对照国标 | ~90 s | **缺失/问题/风险点** |
 | 5 | 生成报告 | 汇总 | <1 s | 完整报告 |
 
 **提高准确度的关键设计**：第 3 步不让模型自由发挥——LLM 只从**严格对应国标条款的固定食品
@@ -40,9 +40,10 @@
 ## 模型与网关
 
 - **OCR（识图）**：硅基流动 `deepseek-ai/DeepSeek-OCR`（`SF_*` 配置）。
-- **识读 / 分类 / 合规评价（reason）**：4090 AMD 网关上的 `Qwen3.6-35B-A3B`，经 tencent 反向隧道
-  `http://127.0.0.1:17590/v1`（`SF_REASON_*` 配置）。Qwen3.6 为推理 + 视觉模型，思考无法关闭，
-  故 reason 调用走**流式** + 大 `max_tokens`，避免长响应被代理/CF 空闲超时掐断。
+- **识读 / 分类 / 合规评价（reason）**：硅基流动 `Qwen/Qwen3-8B`（`SF_REASON_*` 配置，默认与 OCR 同网关）。
+  纯文本模型，**关思考**（`SF_REASON_NO_THINK=1`，`chat_template_kwargs.enable_thinking=false`）下约 90s，
+  比开思考更快更稳。reason 调用走**流式**，避免长响应被代理/CF 空闲超时掉断。
+- 第 2 步识读不看原图，仅凭 DeepSeek-OCR 文本整理结构化字段，故 OCR 质量直接影响识读准确度。
 
 ## 结构
 
@@ -52,7 +53,7 @@ foodlabel-check/
 │   ├── app.py          FastAPI：静态前端 + POST /api/check（一次性）/ /api/check/stream（SSE 分步）
 │   ├── core.py         框架无关核心：analyze_steps 分步生成器（OCR→识读→适用规则→评价）
 │   ├── standards.py    GB7718/GB28050 检查清单 + 固定食品类目 + 各步系统提示词
-│   └── llm.py          硅基流动 OCR + reason 网关客户端（流式、视觉、输出 JSON）
+│   └── llm.py          硅基流动 OCR + reason 客户端（流式、关思考、输出 JSON）
 ├── web/                前端（index.html / app.js / style.css，步骤进度条 + 逐步渲染）
 ├── deploy/             systemd / env 示例 / nginx 片段
 ├── requirements.txt
