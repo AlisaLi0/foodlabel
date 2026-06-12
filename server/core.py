@@ -342,7 +342,8 @@ def normalize(result: dict, applicable: dict[str, dict] | None = None) -> dict:
     # 模型只列出有问题/不适用的项；未列出的视为合规（pass）。
     # 但若整图不是食品标签，则补成 unknown（无从判定）。
     fill_status = "unknown" if result.get("is_food_label") is False else "pass"
-    fill_finding = "模型未列为问题项。" if fill_status == "pass" else "非食品标签，无法判定。"
+    # 合规(pass)项不写多余说明（留空）；非食品标签时标注无法判定。
+    fill_finding = "" if fill_status == "pass" else "非食品标签，无法判定。"
     for cid in _CHECK_IDS:
         if cid not in seen:
             checks.append(

@@ -343,7 +343,8 @@ function renderRules(rules, checks) {
       const st = (c.status || "unknown").toLowerCase();
       const cls = ["pass", "miss", "fail", "warn", "na", "unknown"].includes(st) ? st : "unknown";
       resTag = `<span class="b ${cls}">${STATUS_LABEL[cls]}</span>`;
-      note = c.finding || a.reason || "";
+      // 符合(pass)项不写多余说明（留空）；其余状态显示 finding，无则回退适用理由
+      note = st === "pass" ? (c.finding || "") : (c.finding || a.reason || "");
       rowcls = (st === "miss" || st === "fail") ? "row-fail" : st === "warn" ? "row-warn" : "";
     } else {
       // 第 3 步阶段：尚未评价
