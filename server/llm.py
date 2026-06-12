@@ -6,9 +6,10 @@
   * reason_json(...)      用识读/评价模型做返回 JSON 的调用（默认硅基流动 Qwen/Qwen3-8B）
 
 配置（环境变量）：
+    FOODLABEL_OCR_ENGINE  OCR 引擎：rapidocr（本地 CPU，开源 PP-OCR，默认）/ siliconflow（远程 VLM）
     SF_BASE_URL        OCR 网关，默认 https://api.siliconflow.cn/v1
-    SF_API_KEY         OCR 网关 key（硅基流动，必填）
-    SF_OCR_MODELS      逗号分隔的 OCR 模型，默认 deepseek-ai/DeepSeek-OCR
+    SF_API_KEY         OCR 网关 key（硅基流动，OCR_ENGINE=siliconflow 时必填）
+    SF_OCR_MODELS      逗号分隔的远程 OCR 模型（仅 siliconflow 引擎用）
     SF_REASON_MODEL    识读/评价模型，默认 Qwen/Qwen3-8B
     SF_REASON_BASE_URL 识读/评价网关，默认 https://api.siliconflow.cn/v1
     SF_REASON_API_KEY  识读/评价网关 key；留空则回落用 SF_API_KEY/SF_BASE_URL
@@ -23,18 +24,24 @@ import io
 import json
 import os
 import re
+import threading
 
 import httpx
 
 SF_BASE_URL = os.getenv("SF_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
 SF_API_KEY = os.getenv("SF_API_KEY", "")
-OCR_MODELS = [
+# OCR 引擎：rapidocr（本地 CPU，开源 Apache-2.0 PP-OCR，确定性、零成本、默认）；
+# 或 siliconflow（远程 VLM OCR，需 SF_API_KEY）。
+OCR_ENGINE = os.getenv("FOODLABEL_OCR_ENGINE", "rapidocr").strip().lower()
+# 本地 RapidOCR 显示名（用于 /api/health 与结果归并）。
+RAPIDOCR_NAME = "RapidOCR (PP-OCRv4 mobile)"
+# 远程 VLM OCR 模型（仅 OCR_ENGINE=siliconflow 时使用）。
+_SF_OCR_MODELS = [
     m.strip()
-    for m in os.getenv(
-        "SF_OCR_MODELS", "Qwen/Qwen3-VL-8B-Instruct"
-    ).split(",")
+    for m in os.getenv("SF_OCR_MODELS", "Qwen/Qwen3-VL-8B-Instruct").split(",")
     if m.strip()
 ]
+OCR_MODELS = [RAPIDOCR_NAME] if OCR_ENGINE == "rapidocr" else _SF_OCR_MODELS
 # 识读 / 评价模型。默认硅基流动 Qwen/Qwen3-8B（免费、关思考约 90s、与 OCR 同网关）。
 REASON_MODEL = os.getenv("SF_REASON_MODEL", "Qwen/Qwen3-8B")
 # reason 网关；默认与 OCR 同走硅基流动。缺 key 时回落 OCR 网关 base/key。
@@ -182,8 +189,53 @@ async def ocr(model: str, image_data_url: str, *, max_tokens: int = 3000) -> str
     return _LOC_TOKEN.sub("", _msg_text(msg)).strip()
 
 
+# ── 本地 RapidOCR 引擎（开源 PP-OCR，ONNXRuntime CPU；懒加载单例）──
+_rapidocr_engine = None
+_rapidocr_init_lock = threading.Lock()
+
+
+def _get_rapidocr():
+    """懒加载 RapidOCR 单例。首次约 1.3s 初始化，常驻内存 ~50MB。"""
+    global _rapidocr_engine
+    if _rapidocr_engine is None:
+        with _rapidocr_init_lock:
+            if _rapidocr_engine is None:
+                from rapidocr import RapidOCR
+
+                _rapidocr_engine = RapidOCR()
+    return _rapidocr_engine
+
+
+def _data_url_to_bytes(data_url: str) -> bytes:
+    """data:image/...;base64,xxx → 原始字节。"""
+    b64 = data_url.split(",", 1)[1] if "," in data_url else data_url
+    return base64.b64decode(b64)
+
+
+def _rapidocr_recognize(image_bytes: bytes) -> str:
+    """同步跑 RapidOCR，按行拼接识别文本。在线程池里调用以免阻塞事件循环。"""
+    engine = _get_rapidocr()
+    res = engine(image_bytes)
+    txts = getattr(res, "txts", None)
+    if not txts:
+        return ""
+    return "\n".join(t for t in txts if t)
+
+
+async def _ocr_local(image_data_url: str) -> list[dict]:
+    """本地 RapidOCR 识别，返回与远程一致的 [{model, text, error}] 结构。"""
+    try:
+        raw = _data_url_to_bytes(image_data_url)
+        text = await asyncio.to_thread(_rapidocr_recognize, raw)
+        return [{"model": RAPIDOCR_NAME, "text": text, "error": None}]
+    except Exception as e:  # noqa: BLE001 — 任何识别异常都降级为错误项，不中断流程
+        return [{"model": RAPIDOCR_NAME, "text": "", "error": f"RapidOCR 失败: {e}"}]
+
+
 async def ocr_all(image_data_url: str) -> list[dict]:
-    """并行跑所有 OCR 模型，返回 [{model, text, error}]。"""
+    """跑 OCR，返回 [{model, text, error}]。默认本地 RapidOCR；可切远程 VLM。"""
+    if OCR_ENGINE == "rapidocr":
+        return await _ocr_local(image_data_url)
 
     async def one(m: str) -> dict:
         try:
