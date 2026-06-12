@@ -267,6 +267,8 @@ async def analyze_steps(data_urls: list[str]):
     analyze_user = (
         "食品类目：" + cat.get("name", "") + "（" + cat.get("basis", "") + "）\n"
         "适用规则（不适用项一律判 na，不计入缺失/问题）：\n" + applicable_text + "\n\n"
+        "标签原始识别文本（OCR 原文；判定引导词、排列顺序、标示位置等格式问题以此为准）：\n"
+        + (ocr_draft[:6000] if ocr_draft else "（无）") + "\n\n"
         "已识读出的结构化字段（JSON）：\n" + json.dumps(
             {"label_type": label_type, "extracted": extracted}, ensure_ascii=False
         )
