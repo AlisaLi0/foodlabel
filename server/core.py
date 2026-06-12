@@ -45,6 +45,34 @@ _LABEL_KEYWORDS = (
     "执行标准", "产品标准", "食品生产许可证", "SC", "致敏", "NRV",
 )
 
+# extract_system() 约定的结构化识读字段名。模型偶发把字段铺在顶层（缺 extracted 外层）
+# 时，用这份名单把顶层字段归位，提升识读稳定性。
+_EXTRACT_FIELDS = (
+    "food_name", "ingredients", "additives", "net_content", "spec",
+    "producer", "address", "contact", "production_date", "shelf_life",
+    "expiry_date", "storage", "license_no", "standard_code", "quality_grade",
+    "allergens", "claims", "nutrition_warning", "nutrition_table", "other_text",
+)
+
+
+def _coerce_extract_doc(doc: dict) -> dict:
+    """兼容模型返回结构的抽风：把字段铺在顶层时归位到 extracted。
+
+    Qwen3-8B 偶发不带 {is_food_label, label_type, extracted} 外层，
+    而是把 food_name/ingredients 等直接放在顶层。这里统一成约定结构。
+    """
+    if not isinstance(doc, dict):
+        return {}
+    extracted = doc.get("extracted")
+    if isinstance(extracted, dict) and _has_extracted_content(extracted):
+        return doc
+    # 顶层是否含已知识读字段 → 归位
+    top = {k: doc[k] for k in _EXTRACT_FIELDS if k in doc}
+    if top and _has_extracted_content(top):
+        doc = dict(doc)
+        doc["extracted"] = top
+    return doc
+
 
 class InputError(ValueError):
     """用户输入问题（图片缺失 / 过大 / 格式不支持）。上层应映射为 HTTP 400。"""
@@ -166,10 +194,15 @@ async def analyze_steps(data_urls: list[str]):
         "以下是某食品标签由 OCR 识别出的文本，请据此整理出结构化字段 JSON：\n\n"
         + ocr_draft
     )
-    extracted_doc = await llm.reason_json(extract_system(), extract_user)
+    # 结构化识读：低温调用 + 结构兼容 + 一次重试，缓解模型 JSON 偶发抽风。
+    extracted_doc = _coerce_extract_doc(await llm.reason_json(extract_system(), extract_user))
     extracted = extracted_doc.get("extracted") or {}
     if not _has_extracted_content(extracted) and ocr_draft.strip():
-        # 纯文本识读偶发返回空结构时，至少保留 OCR 草稿，避免前端“识读内容”空白。
+        # 第一次识读为空：很可能是模型随机性，原样重试一次。
+        extracted_doc = _coerce_extract_doc(await llm.reason_json(extract_system(), extract_user))
+        extracted = extracted_doc.get("extracted") or {}
+    if not _has_extracted_content(extracted) and ocr_draft.strip():
+        # 仍为空时，至少保留 OCR 草稿，避免前端“识读内容”空白。
         extracted = {"other_text": ocr_draft[:6000]}
     is_label = extracted_doc.get("is_food_label")
     if is_label is False and _looks_like_food_label(ocr_draft, extracted):

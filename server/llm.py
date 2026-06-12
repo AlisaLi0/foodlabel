@@ -50,6 +50,8 @@ REASON_API_KEY = os.getenv("SF_REASON_API_KEY", "")
 # 关闭模型思考（硅基流动 Qwen3 等支持 chat_template_kwargs.enable_thinking=false）。
 # 关思考更快更稳；不支持的网关会忽略此参数，加了无害。
 _REASON_NO_THINK = os.getenv("SF_REASON_NO_THINK", "1") == "1"
+# 结构化输出调用的采样温度。低温度 → JSON 输出更稳定、更少抽风（默认 0.1）。
+_REASON_TEMPERATURE = float(os.getenv("SF_REASON_TEMPERATURE", "0.1"))
 _TIMEOUT = float(os.getenv("SF_TIMEOUT", "120"))
 # 5xx / 超时重试次数与退避（秒）。
 _RETRIES = int(os.getenv("SF_RETRIES", "2"))
@@ -271,6 +273,7 @@ async def reason_json(
             {"role": "user", "content": user_content},
         ],
         "max_tokens": max_tokens,
+        "temperature": _REASON_TEMPERATURE,
         "response_format": {"type": "json_object"},
     }
     if _REASON_NO_THINK:
