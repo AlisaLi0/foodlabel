@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 from . import llm
 from .standards import (
@@ -164,8 +165,11 @@ async def analyze_steps(data_urls: list[str]):
     if not data_urls:
         raise InputError("没有可分析的图片。")
 
+    t_total = time.perf_counter()
+
     # ── 步骤 1：OCR 识别 ──
     yield {"step": 1, "stage": "ocr", "status": "started", "label": "识别图片"}
+    t0 = time.perf_counter()
     per_image = [await llm.ocr_all(url) for url in data_urls]
     ocr_results: list[dict] = []
     for model in llm.OCR_MODELS:
@@ -184,10 +188,14 @@ async def analyze_steps(data_urls: list[str]):
             "error": "; ".join(errs) if errs and not texts else None,
         })
     ocr_draft = "\n\n".join(r["text"] for r in ocr_results if r["text"])
-    yield {"step": 1, "stage": "ocr", "status": "done", "ocr_results": ocr_results}
+    yield {
+        "step": 1, "stage": "ocr", "status": "done",
+        "ocr_results": ocr_results, "elapsed": round(time.perf_counter() - t0, 1),
+    }
 
     # ── 步骤 2：基于 OCR 文本识读字段 + 营养表 ──
     yield {"step": 2, "stage": "extract", "status": "started", "label": "识读内容"}
+    t0 = time.perf_counter()
     if not ocr_draft:
         raise llm.LLMError("OCR 未识别出任何文本，无法识读标签字段。")
     extract_user = (
@@ -219,6 +227,7 @@ async def analyze_steps(data_urls: list[str]):
         "step": 2, "stage": "extract", "status": "done",
         "is_food_label": is_label, "label_type": label_type,
         "extracted": extracted, "ocr_results": ocr_results,
+        "elapsed": round(time.perf_counter() - t0, 1),
     }
 
     # 明显不是食品标签：直接收尾，不做合规分析。
@@ -229,11 +238,15 @@ async def analyze_steps(data_urls: list[str]):
             "summary": {"verdict": "not_a_label", "score": 0},
         })
         result["ocr_results"] = ocr_results
-        yield {"step": 5, "stage": "done", "status": "done", "result": result}
+        yield {
+            "step": 5, "stage": "done", "status": "done", "result": result,
+            "elapsed_total": round(time.perf_counter() - t_total, 1),
+        }
         return
 
     # ── 步骤 3：判定适用规则（LLM 只做受限分类 → 代码确定性映射出适用条目）──
     yield {"step": 3, "stage": "rules", "status": "started", "label": "判定适用规则"}
+    t0 = time.perf_counter()
     rules_user = "以下是某预包装食品标签已识读出的结构化字段（JSON）：\n\n" + json.dumps(
         {"label_type": label_type, "extracted": extracted}, ensure_ascii=False
     )
@@ -256,10 +269,14 @@ async def analyze_steps(data_urls: list[str]):
             for cid, a in applicable.items()
         ],
     }
-    yield {"step": 3, "stage": "rules", "status": "done", "rules": rules_meta}
+    yield {
+        "step": 3, "stage": "rules", "status": "done", "rules": rules_meta,
+        "elapsed": round(time.perf_counter() - t0, 1),
+    }
 
     # ── 步骤 4：基于适用规则做合规评价（缺失/问题/风险）──
     yield {"step": 4, "stage": "analyze", "status": "started", "label": "合规评价"}
+    t0 = time.perf_counter()
     applicable_text = "\n".join(
         f"- {a['id']}（{_ITEM_BY_ID[a['id']]}）：{'适用' if a['applicable'] else '不适用→判 na'}（{a['reason']}）"
         for a in applicable_list(applicable)
@@ -280,9 +297,16 @@ async def analyze_steps(data_urls: list[str]):
     result = normalize(analysis, applicable=applicable)
     result["ocr_results"] = ocr_results
     result["rules"] = rules_meta
+    yield {
+        "step": 4, "stage": "analyze", "status": "done",
+        "elapsed": round(time.perf_counter() - t0, 1),
+    }
 
     # ── 步骤 5：汇总报告 ──
-    yield {"step": 5, "stage": "done", "status": "done", "result": result}
+    yield {
+        "step": 5, "stage": "done", "status": "done", "result": result,
+        "elapsed_total": round(time.perf_counter() - t_total, 1),
+    }
 
 
 async def analyze_data_urls(data_urls: list[str]) -> dict:

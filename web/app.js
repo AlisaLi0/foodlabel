@@ -152,7 +152,26 @@ function setStep(n, state) {
 function resetSteps() {
   const stepsEl = $("steps");
   stepsEl.hidden = true;
-  stepsEl.querySelectorAll(".step").forEach((el) => el.classList.remove("active", "done"));
+  stepsEl.querySelectorAll(".step").forEach((el) => {
+    el.classList.remove("active", "done");
+    const t = el.querySelector(".time");
+    if (t) t.textContent = "";
+  });
+}
+
+// 在某步标签下标记耗时（秒）。prefix 用于区分单步耗时与总耗时。
+function setStepTime(n, secs, prefix) {
+  if (typeof secs !== "number" || !isFinite(secs)) return;
+  const stepsEl = $("steps");
+  const el = stepsEl.querySelector(`.step[data-step="${n}"]`);
+  if (!el) return;
+  let t = el.querySelector(".time");
+  if (!t) {
+    t = document.createElement("span");
+    t.className = "time";
+    el.appendChild(t);
+  }
+  t.textContent = (prefix || "") + secs.toFixed(1) + "s";
 }
 
 runBtn.addEventListener("click", async () => {
@@ -222,20 +241,28 @@ function onStepEvent(ev) {
   if (ev.stage === "extract") {
     // 第 2 步完成：先展示识读字段 + 营养表
     setStep(2, "done");
+    setStepTime(2, ev.elapsed);
     reportEl.hidden = false;
     renderExtracted(ev);
     reportEl.scrollIntoView({ behavior: "smooth", block: "start" });
   } else if (ev.stage === "ocr") {
     setStep(1, "done");
+    setStepTime(1, ev.elapsed);
     if (Array.isArray(ev.ocr_results)) renderOcr({ ocr_results: ev.ocr_results, ocr_evaluation: {} });
   } else if (ev.stage === "rules") {
     // 第 3 步完成：展示适用规则（食品类目 + 各项适用/豁免，检查结果列暂为待评价）
     setStep(3, "done");
+    setStepTime(3, ev.elapsed);
     reportEl.hidden = false;
     renderRules(ev.rules || {});
+  } else if (ev.stage === "analyze") {
+    // 第 4 步完成：合规评价耗时
+    setStep(4, "done");
+    setStepTime(4, ev.elapsed);
   } else if (ev.stage === "done") {
     // 第 5 步完成：渲染完整合规结论
     setStep(5, "done");
+    setStepTime(5, ev.elapsed_total, "共 ");
     const data = ev.result || {};
     renderExtracted(data);
     renderRules(data.rules, data.checks);

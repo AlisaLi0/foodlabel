@@ -120,6 +120,8 @@ main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
   background: #e5e7eb; color: #9aa0a6; transition: background .25s, color .25s;
 }
 .steps .lbl { font-size: 13.5px; color: var(--muted); transition: color .25s; }
+.steps .time { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 2px; }
+.steps .step.done .time { color: var(--pass); }
 .steps .bar { flex: 1; height: 2px; background: var(--line); min-width: 16px; }
 /* 进行中：蓝色脉冲 */
 .steps .step.active .dot { background: var(--brand); color: #fff; animation: pulse 1.2s ease-in-out infinite; }
