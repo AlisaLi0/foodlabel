@@ -76,6 +76,24 @@ def _coerce_extract_doc(doc: dict) -> dict:
     return doc
 
 
+async def _extract_once(extract_user: str, images: list[str] | None) -> dict:
+    """调用识读模型一次并归一结构。
+
+    若带图（视觉）调用失败——多见于模型/网关其实不支持图片——自动退回纯文本识读，
+    保证识读不因开启视觉而整体失败。
+    """
+    try:
+        return _coerce_extract_doc(
+            await llm.reason_json(extract_system(), extract_user, images=images)
+        )
+    except llm.LLMError:
+        if images:
+            return _coerce_extract_doc(
+                await llm.reason_json(extract_system(), extract_user)
+            )
+        raise
+
+
 class InputError(ValueError):
     """用户输入问题（图片缺失 / 过大 / 格式不支持）。上层应映射为 HTTP 400。"""
 
@@ -188,27 +206,34 @@ async def analyze_steps(data_urls: list[str]):
             "text": "\n\n---\n\n".join(texts),
             "error": "; ".join(errs) if errs and not texts else None,
         })
-    ocr_draft = "\n\n".join(r["text"] for r in ocr_results if r["text"])
+    # 多个 OCR 引擎的结果都带上模型标签拼给识读步骤，便于交叉印证、纠错。
+    ocr_draft = "\n\n".join(
+        f"【{r['model']}】\n{r['text']}" for r in ocr_results if r["text"]
+    )
     yield {
         "step": 1, "stage": "ocr", "status": "done",
         "ocr_results": ocr_results, "elapsed": round(time.perf_counter() - t0, 1),
     }
 
-    # ── 步骤 2：基于 OCR 文本识读字段 + 营养表 ──
+    # ── 步骤 2：基于 OCR 文本（+ 多模态时附原图）识读字段 + 营养表 ──
     yield {"step": 2, "stage": "extract", "status": "started", "label": "识读内容"}
     t0 = time.perf_counter()
     if not ocr_draft:
         raise llm.LLMError("OCR 未识别出任何文本，无法识读标签字段。")
+    # 识读模型支持多模态时把原图一并喂入做参考；纯文本模型则只给 OCR 文本。
+    extract_images = data_urls if llm.REASON_VISION else None
     extract_user = (
-        "以下是某食品标签由 OCR 识别出的文本，请据此整理出结构化字段 JSON：\n\n"
+        "以下是该食品标签经一个或多个 OCR 引擎识别出的文本"
+        + ("（已附原始标签图片，请以图片为准、OCR 文本作辅助）" if extract_images else "")
+        + "，请综合整理出结构化字段 JSON：\n\n"
         + ocr_draft
     )
-    # 结构化识读：低温调用 + 结构兼容 + 一次重试，缓解模型 JSON 偶发抽风。
-    extracted_doc = _coerce_extract_doc(await llm.reason_json(extract_system(), extract_user))
+    # 结构化识读：多模态参考 + 结构兼容 + 一次重试，缓解模型 JSON 偶发抽风。
+    extracted_doc = await _extract_once(extract_user, extract_images)
     extracted = extracted_doc.get("extracted") or {}
     if not _has_extracted_content(extracted) and ocr_draft.strip():
         # 第一次识读为空：很可能是模型随机性，原样重试一次。
-        extracted_doc = _coerce_extract_doc(await llm.reason_json(extract_system(), extract_user))
+        extracted_doc = await _extract_once(extract_user, extract_images)
         extracted = extracted_doc.get("extracted") or {}
     if not _has_extracted_content(extracted) and ocr_draft.strip():
         # 仍为空时，至少保留 OCR 草稿，避免前端“识读内容”空白。

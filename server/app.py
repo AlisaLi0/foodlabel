@@ -78,6 +78,7 @@ async def health() -> dict:
         "ok": True,
         "ocr_models": llm.OCR_MODELS,
         "reason_model": llm.REASON_MODEL,
+        "reason_vision": llm.REASON_VISION,
         "standards": STANDARDS,
     }
 

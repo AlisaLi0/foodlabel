@@ -6,13 +6,16 @@
   * reason_json(...)      用识读/评价模型做返回 JSON 的调用（默认硅基流动 Qwen/Qwen3-8B）
 
 配置（环境变量）：
-    FOODLABEL_OCR_ENGINE  OCR 引擎：rapidocr（本地 CPU，开源 PP-OCR，默认）/ siliconflow（远程 VLM）
-    SF_BASE_URL        OCR 网关，默认 https://api.siliconflow.cn/v1
-    SF_API_KEY         OCR 网关 key（硅基流动，OCR_ENGINE=siliconflow 时必填）
-    SF_OCR_MODELS      逗号分隔的远程 OCR 模型（仅 siliconflow 引擎用）
+    FOODLABEL_OCR_ENGINES 逗号分隔的 OCR 引擎，**全部并行执行**、结果都喂给识读步骤参考。
+                       取值：rapidocr（本地 CPU 开源 PP-OCR）或远程模型 id（如 deepseek-ai/DeepSeek-OCR）。
+                       默认 rapidocr,deepseek-ai/DeepSeek-OCR。想加更多模型一起识别，逗号追加即可。
+    SF_BASE_URL        远程 OCR 网关，默认 https://api.siliconflow.cn/v1
+    SF_API_KEY         远程 OCR 网关 key（用到远程 OCR 引擎时必填）
     SF_REASON_MODEL    识读/评价模型，默认 Qwen/Qwen3-8B
     SF_REASON_BASE_URL 识读/评价网关，默认 https://api.siliconflow.cn/v1
     SF_REASON_API_KEY  识读/评价网关 key；留空则回落用 SF_API_KEY/SF_BASE_URL
+    SF_REASON_VISION   识读模型是否支持多模态：1/0 强制，留空则按模型名自动判断。
+                       支持时识读阶段会把原始图片一并喂入做参考。
     SF_REASON_NO_THINK 关闭模型思考（Qwen3 等），默认 1（关）。关思考更快更稳。
     SF_TIMEOUT         秒，默认 120
 """
@@ -30,28 +33,54 @@ import httpx
 
 SF_BASE_URL = os.getenv("SF_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
 SF_API_KEY = os.getenv("SF_API_KEY", "")
-# OCR 引擎：rapidocr（本地 CPU，开源 Apache-2.0 PP-OCR，确定性、零成本、默认）；
-# 或 siliconflow（远程 VLM OCR，需 SF_API_KEY）。
-OCR_ENGINE = os.getenv("FOODLABEL_OCR_ENGINE", "rapidocr").strip().lower()
 # 本地 RapidOCR 显示名（用于 /api/health 与结果归并）。
 RAPIDOCR_NAME = "RapidOCR (PP-OCRv4 mobile)"
-# 远程 VLM OCR 模型（仅 OCR_ENGINE=siliconflow 时使用）。
-_SF_OCR_MODELS = [
-    m.strip()
-    for m in os.getenv("SF_OCR_MODELS", "Qwen/Qwen3-VL-8B-Instruct").split(",")
-    if m.strip()
-]
-OCR_MODELS = [RAPIDOCR_NAME] if OCR_ENGINE == "rapidocr" else _SF_OCR_MODELS
+# OCR 引擎列表：逗号分隔，可混合本地与远程，**全部并行执行**、结果都喂给识读步骤做参考。
+#   - "rapidocr"   → 本地 RapidOCR（CPU，开源 Apache-2.0，确定性、零成本）
+#   - 其它模型 id（deepseek-ai/DeepSeek-OCR、Qwen/Qwen3-VL-8B-Instruct 等）→ 远程 VLM OCR
+#     （走 SF_BASE_URL/SF_API_KEY 网关）。想加更多模型一起识别，逗号追加即可。
+# 兼容旧变量 FOODLABEL_OCR_ENGINE（单数）。
+_raw_ocr_engines = (
+    os.getenv("FOODLABEL_OCR_ENGINES")
+    or os.getenv("FOODLABEL_OCR_ENGINE")
+    or "rapidocr,deepseek-ai/DeepSeek-OCR"
+)
+OCR_ENGINES = [e.strip() for e in _raw_ocr_engines.split(",") if e.strip()]
+# 对外展示/结果归并用的模型名列表（与 OCR_ENGINES 顺序一致）。
+OCR_MODELS = [(RAPIDOCR_NAME if e.lower() == "rapidocr" else e) for e in OCR_ENGINES]
 # 识读 / 评价模型。默认硅基流动 Qwen/Qwen3-8B（免费、关思考约 90s、与 OCR 同网关）。
 REASON_MODEL = os.getenv("SF_REASON_MODEL", "Qwen/Qwen3-8B")
 # reason 网关；默认与 OCR 同走硅基流动。缺 key 时回落 OCR 网关 base/key。
 REASON_BASE_URL = os.getenv("SF_REASON_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("/")
 REASON_API_KEY = os.getenv("SF_REASON_API_KEY", "")
+
+
+def _looks_multimodal(model: str) -> bool:
+    """按模型名粗判是否多模态（视觉）。仅作默认值，可被 SF_REASON_VISION 覆盖。"""
+    m = (model or "").lower()
+    return any(k in m for k in (
+        "vl", "vision", "qwen3.6", "qwen2.5-vl", "qwen2-vl",
+        "gpt-4o", "gpt-4.1", "gpt-5", "gemini", "claude-3", "claude-4",
+        "claude-opus", "claude-sonnet", "internvl", "minicpm-v", "llava", "pixtral", "multimodal",
+    ))
+
+
+# 识读模型是否支持多模态：识读阶段支持时会把原始图片一并喂入做参考。
+# SF_REASON_VISION=1/0 强制开关；留空则按模型名自动判断。
+_vision_env = os.getenv("SF_REASON_VISION", "").strip().lower()
+if _vision_env in ("1", "true", "yes", "on"):
+    REASON_VISION = True
+elif _vision_env in ("0", "false", "no", "off"):
+    REASON_VISION = False
+else:
+    REASON_VISION = _looks_multimodal(REASON_MODEL)
 # 关闭模型思考（硅基流动 Qwen3 等支持 chat_template_kwargs.enable_thinking=false）。
 # 关思考更快更稳；不支持的网关会忽略此参数，加了无害。
 _REASON_NO_THINK = os.getenv("SF_REASON_NO_THINK", "1") == "1"
-# 结构化输出调用的采样温度。低温度 → JSON 输出更稳定、更少抽风（默认 0.1）。
-_REASON_TEMPERATURE = float(os.getenv("SF_REASON_TEMPERATURE", "0.1"))
+# 结构化输出调用的采样温度。法律合规判定要求确定性，默认 0（贪心解码）。
+_REASON_TEMPERATURE = float(os.getenv("SF_REASON_TEMPERATURE", "0"))
+# 固定随机种子，进一步保证同输入同输出（服务端支持时生效）。
+_REASON_SEED = int(os.getenv("SF_REASON_SEED", "42"))
 _TIMEOUT = float(os.getenv("SF_TIMEOUT", "120"))
 # 5xx / 超时重试次数与退避（秒）。
 _RETRIES = int(os.getenv("SF_RETRIES", "2"))
@@ -224,28 +253,24 @@ def _rapidocr_recognize(image_bytes: bytes) -> str:
     return "\n".join(t for t in txts if t)
 
 
-async def _ocr_local(image_data_url: str) -> list[dict]:
-    """本地 RapidOCR 识别，返回与远程一致的 [{model, text, error}] 结构。"""
-    try:
-        raw = _data_url_to_bytes(image_data_url)
-        text = await asyncio.to_thread(_rapidocr_recognize, raw)
-        return [{"model": RAPIDOCR_NAME, "text": text, "error": None}]
-    except Exception as e:  # noqa: BLE001 — 任何识别异常都降级为错误项，不中断流程
-        return [{"model": RAPIDOCR_NAME, "text": "", "error": f"RapidOCR 失败: {e}"}]
-
-
 async def ocr_all(image_data_url: str) -> list[dict]:
-    """跑 OCR，返回 [{model, text, error}]。默认本地 RapidOCR；可切远程 VLM。"""
-    if OCR_ENGINE == "rapidocr":
-        return await _ocr_local(image_data_url)
+    """并行跑所有配置的 OCR 引擎（本地 RapidOCR + 远程 VLM 等），所有结果都返回。
 
-    async def one(m: str) -> dict:
+    返回 [{model, text, error}]，顺序与 OCR_ENGINES 一致；任一引擎失败只记 error，不影响其它。
+    """
+    async def one(engine: str) -> dict:
+        name = RAPIDOCR_NAME if engine.lower() == "rapidocr" else engine
         try:
-            return {"model": m, "text": await ocr(m, image_data_url), "error": None}
-        except LLMError as e:
-            return {"model": m, "text": "", "error": str(e)}
+            if engine.lower() == "rapidocr":
+                raw = _data_url_to_bytes(image_data_url)
+                text = await asyncio.to_thread(_rapidocr_recognize, raw)
+            else:
+                text = await ocr(engine, image_data_url)
+            return {"model": name, "text": text, "error": None}
+        except Exception as e:  # noqa: BLE001 — 单引擎失败降级为错误项，不中断整体
+            return {"model": name, "text": "", "error": f"{name} 失败: {e}"}
 
-    return list(await asyncio.gather(*(one(m) for m in OCR_MODELS)))
+    return list(await asyncio.gather(*(one(e) for e in OCR_ENGINES)))
 
 
 async def reason_json(
@@ -274,6 +299,8 @@ async def reason_json(
         ],
         "max_tokens": max_tokens,
         "temperature": _REASON_TEMPERATURE,
+        "top_p": 1,
+        "seed": _REASON_SEED,
         "response_format": {"type": "json_object"},
     }
     if _REASON_NO_THINK:
