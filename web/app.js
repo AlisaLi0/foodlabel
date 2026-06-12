@@ -128,11 +128,14 @@ window.addEventListener("paste", (e) => {
 });
 
 resetBtn.addEventListener("click", () => {
+  streamToken++; // 让正在进行的拉流循环失效
+  clearJob();
   files.forEach((f) => URL.revokeObjectURL(f.url));
   files = [];
   renderThumbs();
   reportEl.hidden = true;
   statusEl.hidden = true;
+  runBtn.disabled = false;
   resetSteps();
 });
 
@@ -187,21 +190,112 @@ runBtn.addEventListener("click", async () => {
   files.forEach((f) => fd.append("images", f.file, f.file.name));
 
   try {
-    const resp = await fetch(api("api/check/stream"), { method: "POST", body: fd });
-    if (!resp.ok || !resp.body) {
+    // 先启动后台任务，拿到 job_id（处理脱离本请求，切页/刷新都不中断）。
+    const resp = await fetch(api("api/check/start"), { method: "POST", body: fd });
+    if (!resp.ok) {
       let msg = `请求失败 (${resp.status})`;
       try { msg = (await resp.json()).error || msg; } catch (e) {}
       throw new Error(msg);
     }
-    await consumeSSE(resp.body, onStepEvent);
+    const { job_id } = await resp.json();
+    if (!job_id) throw new Error("未能创建检查任务");
+    saveJob(job_id);
+    // 拉取事件流（可重连续接）；从头回放。
+    await streamJob(job_id, 0);
   } catch (err) {
     statusEl.hidden = false;
     statusEl.className = "status err";
     statusEl.textContent = "出错了：" + err.message;
-  } finally {
     runBtn.disabled = false;
   }
 });
+
+// ── 后台任务：持久化 job_id，切页/刷新/断线都能续接，不中断处理 ──
+const JOB_KEY = "foodlabel_job_v1";
+// 任务最长跟踪时长（毫秒）；超过则视为过期，刷新后不再尝试恢复。
+const JOB_MAX_AGE = 30 * 60 * 1000;
+// 流令牌：每次新检查/恢复/重置都自增，使旧的拉流循环自动失效（避免重置后仍在更新 UI）。
+let streamToken = 0;
+
+function saveJob(id) {
+  try { localStorage.setItem(JOB_KEY, JSON.stringify({ id, ts: Date.now() })); } catch (e) {}
+}
+function loadJob() {
+  try {
+    const j = JSON.parse(localStorage.getItem(JOB_KEY) || "null");
+    if (j && j.id && Date.now() - (j.ts || 0) < JOB_MAX_AGE) return j;
+  } catch (e) {}
+  return null;
+}
+function clearJob() {
+  try { localStorage.removeItem(JOB_KEY); } catch (e) {}
+}
+
+function _isTerminal(ev) {
+  return (ev.stage === "done" && ev.status === "done") || ev.stage === "error";
+}
+
+// 拉取并消费某任务的事件流，支持断线/超时自动重连续接（从已收到的事件数续拉）。
+async function streamJob(jobId, fromIndex) {
+  const myToken = ++streamToken;
+  let idx = fromIndex || 0;
+  let finished = false;
+  while (!finished && myToken === streamToken) {
+    let resp;
+    try {
+      resp = await fetch(api(`api/check/stream?job_id=${encodeURIComponent(jobId)}&from=${idx}`));
+    } catch (netErr) {
+      await sleep(1500);
+      continue; // 网络抖动：稍后用当前 idx 重连续接
+    }
+    if (myToken !== streamToken) return; // 已被新检查/重置取代
+    if (resp.status === 404) {
+      // 任务已过期/服务重启：清掉，停止恢复（避免无意义重试）。
+      clearJob();
+      runBtn.disabled = false;
+      return;
+    }
+    if (!resp.ok || !resp.body) {
+      await sleep(1500);
+      continue;
+    }
+    try {
+      await consumeSSE(resp.body, (ev) => {
+        if (myToken !== streamToken) return;
+        idx++;
+        if (_isTerminal(ev)) finished = true;
+        // 恢复中的提示在收到首个事件后撤掉
+        if (statusEl.textContent === "正在恢复上次的检查进度…") statusEl.hidden = true;
+        onStepEvent(ev);
+      });
+    } catch (streamErr) {
+      // 流中断：若任务尚未完成，用最新 idx 续接。
+    }
+    if (myToken !== streamToken) return;
+    if (!finished) await sleep(1200);
+  }
+  if (myToken !== streamToken) return;
+  clearJob();
+  runBtn.disabled = false;
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// 页面加载：若有未完成的检查任务，自动恢复进度（回放已完成步骤并续接后续）。
+function resumeJobIfAny() {
+  const j = loadJob();
+  if (!j) return;
+  resetSteps();
+  clearReport();
+  statusEl.hidden = false;
+  statusEl.className = "status";
+  statusEl.textContent = "正在恢复上次的检查进度…";
+  runBtn.disabled = true;
+  streamJob(j.id, 0);
+}
+resumeJobIfAny();
 
 // 读取 SSE 流，逐行解析 `data: {...}` 事件
 async function consumeSSE(stream, onEvent) {

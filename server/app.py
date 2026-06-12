@@ -1,9 +1,11 @@
 """biaoqianshibie 后端 API — 食品标签国标合规检查.
 
 纯 JSON API（前后端分离，参照 JuriCodex）：
-  POST /api/check      上传标签图片 → 返回结构化合规报告
-  GET  /api/checklist  返回检查清单与标准依据
-  GET  /api/health     健康检查
+  POST /api/check          上传标签图片 → 一次性返回结构化合规报告（供 MCP/脚本）
+  POST /api/check/start    启动后台检查 → 返回 job_id（处理脱离请求，切页/刷新不中断）
+  GET  /api/check/stream   ?job_id=&from= 拉取分步事件流（SSE），可断线重连续接
+  GET  /api/checklist      返回检查清单与标准依据
+  GET  /api/health         健康检查
 核心识读/判定逻辑在 server/core.py（框架无关，供 MCP server 复用）。
 
 前端是独立的静态资源（web/），通过可配置的 API base 调用本 API；为方便起见，
@@ -14,9 +16,11 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
+import uuid
 from collections import deque
 
 from fastapi import FastAPI, Request
@@ -72,6 +76,57 @@ def _rate_limited(ip: str) -> bool:
     return False
 
 
+# ── 后台任务存储：让检查脱离单次请求生命周期，切页/刷新/断线都不中断处理 ──
+# 每个任务把分步事件**追加缓冲**到 events 列表（永不删除，索引稳定），
+# SSE 消费端可从任意 from 索引回放 + 续接；多次重连/多个监听端都可以。
+_JOBS: dict[str, dict] = {}
+# 任务数量上限与保留时长（秒）：已完成任务多保留一会儿，供刷新后回放最终结果。
+_JOBS_MAX = int(os.getenv("FOODLABEL_JOBS_MAX", "200"))
+_JOB_TTL = int(os.getenv("FOODLABEL_JOB_TTL", "3600"))
+_JOB_DONE_TTL = int(os.getenv("FOODLABEL_JOB_DONE_TTL", "1800"))
+
+
+def _gc_jobs() -> None:
+    """清理过期/超量任务：先按 TTL 删，再超量时优先删最老的已完成任务。"""
+    now = time.time()
+    for jid in [
+        jid for jid, j in _JOBS.items()
+        if now - j["created"] > _JOB_TTL
+        or (j["done"] and now - j["updated"] > _JOB_DONE_TTL)
+    ]:
+        _JOBS.pop(jid, None)
+    if len(_JOBS) > _JOBS_MAX:
+        for jid, _ in sorted(_JOBS.items(), key=lambda kv: (not kv[1]["done"], kv[1]["created"])):
+            if len(_JOBS) <= _JOBS_MAX:
+                break
+            _JOBS.pop(jid, None)
+
+
+async def _run_job(job_id: str, data_urls: list[str]) -> None:
+    """后台跑分步分析，把事件追加进任务缓冲；与请求连接解耦，断线不影响。"""
+    job = _JOBS[job_id]
+    cond: asyncio.Condition = job["cond"]
+
+    async def emit(ev: dict) -> None:
+        async with cond:
+            job["events"].append(ev)
+            job["updated"] = time.time()
+            cond.notify_all()
+
+    try:
+        async for ev in core.analyze_steps(data_urls):
+            await emit(ev)
+    except llm.LLMError as e:
+        await emit({"stage": "error", "status": "error", "error": f"识别失败：{e}"})
+    except Exception as e:  # noqa: BLE001 — 兜底，避免任务悬挂
+        await emit({"stage": "error", "status": "error", "error": f"服务异常：{e}"})
+    finally:
+        async with cond:
+            job["done"] = True
+            job["updated"] = time.time()
+            cond.notify_all()
+
+
 @app.get("/api/health")
 async def health() -> dict:
     return {
@@ -122,11 +177,11 @@ async def _read_uploads(request: Request) -> list[tuple[bytes, str | None]]:
     return items
 
 
-@app.post("/api/check/stream")
-async def check_stream(request: Request):
-    """分步流式检查：SSE 逐步推送 识别→识读→对照国标→完成 各阶段事件。
+@app.post("/api/check/start")
+async def check_start(request: Request) -> JSONResponse:
+    """启动一次后台检查，立即返回 job_id。处理脱离本请求，切页/刷新不会中断。
 
-    每个事件是一行 `data: <json>\\n\\n`，前端据 step/stage/status 点亮进度条、逐步渲染。
+    前端拿 job_id 后用 GET /api/check/stream?job_id=&from= 拉取分步事件，可随时重连续接。
     """
     ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "?")
     if _rate_limited(ip):
@@ -138,17 +193,63 @@ async def check_stream(request: Request):
     except core.InputError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-    async def gen():
-        def sse(obj: dict) -> bytes:
-            return ("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode("utf-8")
+    _gc_jobs()
+    job_id = uuid.uuid4().hex
+    _JOBS[job_id] = {
+        "events": [], "done": False,
+        "created": time.time(), "updated": time.time(),
+        "cond": asyncio.Condition(),
+    }
+    # 后台任务：与请求解耦，客户端断开也照常跑完。
+    asyncio.create_task(_run_job(job_id, data_urls))
+    return JSONResponse({"job_id": job_id})
 
-        try:
-            async for ev in core.analyze_steps(data_urls):
-                yield sse(ev)
-        except llm.LLMError as e:
-            yield sse({"stage": "error", "status": "error", "error": f"识别失败：{e}"})
-        except Exception as e:  # 兜底，避免连接悬挂
-            yield sse({"stage": "error", "status": "error", "error": f"服务异常：{e}"})
+
+@app.get("/api/check/stream")
+async def check_stream(request: Request):
+    """按 job_id 拉取分步事件流（SSE）。先回放 from 起的已缓冲事件，再续推实时事件。
+
+    可被多次重连：刷新/切页/断线后带上已收到的事件数作为 from，即可无缝续接、不丢步骤。
+    """
+    job_id = request.query_params.get("job_id", "")
+    try:
+        from_ = max(0, int(request.query_params.get("from", "0") or 0))
+    except ValueError:
+        from_ = 0
+
+    job = _JOBS.get(job_id)
+    if job is None:
+        return JSONResponse({"error": "任务不存在或已过期，请重新上传检查。"}, status_code=404)
+
+    cond: asyncio.Condition = job["cond"]
+
+    async def gen():
+        def sse(obj: dict, idx: int) -> bytes:
+            return (
+                f"id: {idx}\n"
+                + "data: " + json.dumps(obj, ensure_ascii=False) + "\n\n"
+            ).encode("utf-8")
+
+        idx = from_
+        while True:
+            batch: list[tuple[int, dict]] = []
+            async with cond:
+                while idx >= len(job["events"]) and not job["done"]:
+                    try:
+                        await asyncio.wait_for(cond.wait(), timeout=15)
+                    except asyncio.TimeoutError:
+                        break  # 退出锁去发一个心跳，避免连接被中间层判空闲掐断
+                while idx < len(job["events"]):
+                    batch.append((idx, job["events"][idx]))
+                    idx += 1
+                finished = job["done"] and idx >= len(job["events"])
+            if batch:
+                for i, ev in batch:
+                    yield sse(ev, i)
+            else:
+                yield b": keep-alive\n\n"  # SSE 注释行，仅保活，不触发前端事件
+            if finished:
+                break
 
     return StreamingResponse(
         gen(),
