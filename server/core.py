@@ -44,6 +44,20 @@ class InputError(ValueError):
     """用户输入问题（图片缺失 / 过大 / 格式不支持）。上层应映射为 HTTP 400。"""
 
 
+def _has_extracted_content(extracted: dict) -> bool:
+    """判断结构化识读结果是否包含有效内容。"""
+    if not isinstance(extracted, dict):
+        return False
+    for v in extracted.values():
+        if isinstance(v, str) and v.strip():
+            return True
+        if isinstance(v, list) and v:
+            return True
+        if isinstance(v, dict) and v:
+            return True
+    return False
+
+
 async def check_image_bytes(
     items: list[tuple[bytes, str | None]],
     *,
@@ -129,6 +143,9 @@ async def analyze_steps(data_urls: list[str]):
     )
     extracted_doc = await llm.reason_json(extract_system(), extract_user)
     extracted = extracted_doc.get("extracted") or {}
+    if not _has_extracted_content(extracted) and ocr_draft.strip():
+        # 纯文本识读偶发返回空结构时，至少保留 OCR 草稿，避免前端“识读内容”空白。
+        extracted = {"other_text": ocr_draft[:6000]}
     is_label = extracted_doc.get("is_food_label")
     label_type = extracted_doc.get("label_type", "")
     yield {

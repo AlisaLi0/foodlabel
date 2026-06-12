@@ -183,12 +183,17 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .checks tr.row-fail { background: #fdf6f5; }
 .checks tr.row-warn { background: #fdfaf0; }
 
-/* 适用规则表（复用 checks 列宽） */
+/* 适用规则 + 合规检查 合并表 */
 .rules { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rules th { text-align: left; padding: 8px; font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 2px solid var(--line); }
 .rules td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.rules td.st { width: 64px; white-space: nowrap; }
-.rules td.it { width: 150px; font-weight: 600; }
+.rules td.st, .rules th.st { width: 80px; white-space: nowrap; }
+.rules td.it, .rules th.it { width: 150px; font-weight: 600; }
+.rules .basis { color: var(--muted); font-size: 12px; display: block; margin-top: 3px; font-weight: 400; }
 .rules tr:last-child td { border-bottom: none; }
+.rules tr.row-fail { background: #fdf6f5; }
+.rules tr.row-warn { background: #fdfaf0; }
+.b.pending { background: #e5e7eb; color: #6b7280; }
 .cat { font-size: 13px; font-weight: 600; color: var(--brand-d); }
 
 #suggestions { margin: 0; padding-left: 20px; }

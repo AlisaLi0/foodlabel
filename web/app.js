@@ -229,7 +229,7 @@ function onStepEvent(ev) {
     setStep(1, "done");
     if (Array.isArray(ev.ocr_results)) renderOcr({ ocr_results: ev.ocr_results, ocr_evaluation: {} });
   } else if (ev.stage === "rules") {
-    // 第 3 步完成：展示适用规则（食品类目 + 各项适用/豁免）
+    // 第 3 步完成：展示适用规则（食品类目 + 各项适用/豁免，检查结果列暂为待评价）
     setStep(3, "done");
     reportEl.hidden = false;
     renderRules(ev.rules || {});
@@ -238,9 +238,8 @@ function onStepEvent(ev) {
     setStep(5, "done");
     const data = ev.result || {};
     renderExtracted(data);
-    if (data.rules) renderRules(data.rules);
+    renderRules(data.rules, data.checks);
     renderVerdict(data);
-    renderChecks(data);
     renderFindings("missing", data.missing);
     renderFindings("problems", data.problems);
     renderFindings("risks", data.risks);
@@ -256,7 +255,6 @@ function clearReport() {
   $("extracted").innerHTML = "";
   $("nutriWrap").hidden = true;
   $("rulesBox").hidden = true;
-  $("checks").innerHTML = "";
   ["missing", "problems", "risks"].forEach((k) => {
     $(k + "List").innerHTML = "";
     $(k + "Count").textContent = "0";
@@ -292,20 +290,48 @@ function renderExtracted(data) {
   }
 }
 
-// 渲染适用规则（食品类目 + 各检查项适用/豁免）
-function renderRules(rules) {
+// 渲染适用规则 + 合规检查（合并为一张表：项目 | 适用性 | 检查结果 | 说明）
+// 第 3 步完成时只有适用性（checks 为空，适用项显示“待评价”）；第 5 步带 checks 回填结果。
+function renderRules(rules, checks) {
   if (!rules || !rules.category_name) { $("rulesBox").hidden = true; return; }
   const imp = rules.is_import ? " \u00b7 \u8fdb\u53e3\u98df\u54c1" : "";
   $("rulesCat").textContent = rules.category_name + (rules.category_basis ? "\uff08" + rules.category_basis + "\uff09" : "") + imp;
   $("rulesReason").textContent = rules.category_reason || "";
   const list = Array.isArray(rules.applicable) ? rules.applicable : [];
-  $("rulesTable").innerHTML = list.map((a) => {
+  const checkById = {};
+  (Array.isArray(checks) ? checks : []).forEach((c) => { if (c && c.id) checkById[c.id] = c; });
+  const head = `<tr><th class="it">\u9879\u76ee</th><th class="st">\u9002\u7528\u6027</th><th class="st">\u68c0\u67e5\u7ed3\u679c</th><th>\u8bf4\u660e</th></tr>`;
+  const rows = list.map((a) => {
     const ok = a.applicable;
-    const tag = ok
+    const appTag = ok
       ? `<span class="b pass">\u9002\u7528</span>`
       : `<span class="b na">\u8c41\u514d</span>`;
-    return `<tr><td class="st">${tag}</td><td class="it">${esc(a.item)}</td><td>${esc(a.reason || "")}</td></tr>`;
+    const c = checkById[a.id];
+    let resTag, note, rowcls = "";
+    if (!ok) {
+      // 豁免项：检查结果固定不适用，说明用豁免理由
+      resTag = `<span class="b na">${STATUS_LABEL.na}</span>`;
+      note = a.reason || "";
+    } else if (c) {
+      const st = (c.status || "unknown").toLowerCase();
+      const cls = ["pass", "fail", "warn", "na", "unknown"].includes(st) ? st : "unknown";
+      resTag = `<span class="b ${cls}">${STATUS_LABEL[cls]}</span>`;
+      note = c.finding || a.reason || "";
+      rowcls = st === "fail" ? "row-fail" : st === "warn" ? "row-warn" : "";
+    } else {
+      // 第 3 步阶段：尚未评价
+      resTag = `<span class="b pending">\u5f85\u8bc4\u4ef7</span>`;
+      note = a.reason || "";
+    }
+    const basis = (c && c.basis) || a.basis || "";
+    return `<tr class="${rowcls}">
+      <td class="it">${esc(a.item)}<span class="basis">${esc(basis)}</span></td>
+      <td class="st">${appTag}</td>
+      <td class="st">${resTag}</td>
+      <td>${esc(note)}</td>
+    </tr>`;
   }).join("");
+  $("rulesTable").innerHTML = head + rows;
   $("rulesBox").hidden = false;
 }
 
@@ -319,24 +345,6 @@ function renderVerdict(data) {
   if (typeof summary.score === "number") score = `<span class="score">合规评分 ${summary.score}/100</span>`;
   const counts = `符合 ${summary.pass || 0} · 不符合 ${summary.fail || 0} · 需复核 ${summary.warn || 0}`;
   v.innerHTML = `${score}${esc(VERDICT_LABEL[verdict] || verdict)}<div class="sub" style="font-weight:400;font-size:13px;margin-top:4px;">${counts}</div>`;
-}
-
-// 渲染合规检查表
-function renderChecks(data) {
-  const checks = Array.isArray(data.checks) ? data.checks : [];
-  const order = { fail: 0, warn: 1, unknown: 2, pass: 3, na: 4 };
-  checks.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
-  const ctbl = $("checks");
-  ctbl.innerHTML = checks.map((c) => {
-    const st = (c.status || "unknown").toLowerCase();
-    const cls = ["pass", "fail", "warn", "na", "unknown"].includes(st) ? st : "unknown";
-    const rowcls = st === "fail" ? "row-fail" : st === "warn" ? "row-warn" : "";
-    return `<tr class="${rowcls}">
-      <td class="st"><span class="b ${cls}">${STATUS_LABEL[cls]}</span></td>
-      <td class="it">${esc(c.item)}<span class="basis">${esc(c.basis || "")}</span></td>
-      <td>${esc(c.finding || "")}</td>
-    </tr>`;
-  }).join("");
 }
 
 const LEVEL_LABEL = { high: "高", medium: "中", low: "低" };
