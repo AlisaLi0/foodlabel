@@ -39,6 +39,12 @@ _ITEM_BY_ID = {c["id"]: c["item"] for c in CHECKLIST}
 _BASIS_BY_ID = {c["id"]: c["basis"] for c in CHECKLIST}
 _CAT_BY_ID = {c["id"]: c["category"] for c in CHECKLIST}
 
+# 出现这些词通常可以确定是食品标签文本，避免模型把明显标签误判为 not_a_label。
+_LABEL_KEYWORDS = (
+    "配料", "营养成分", "营养", "净含量", "规格", "保质期", "生产日期", "贮存", "储存",
+    "执行标准", "产品标准", "食品生产许可证", "SC", "致敏", "NRV",
+)
+
 
 class InputError(ValueError):
     """用户输入问题（图片缺失 / 过大 / 格式不支持）。上层应映射为 HTTP 400。"""
@@ -54,6 +60,25 @@ def _has_extracted_content(extracted: dict) -> bool:
         if isinstance(v, list) and v:
             return True
         if isinstance(v, dict) and v:
+            return True
+    return False
+
+
+def _looks_like_food_label(ocr_text: str, extracted: dict) -> bool:
+    """基于 OCR/结构化字段做确定性兜底，减少 false negative。"""
+    text = (ocr_text or "")
+    if any(k in text for k in _LABEL_KEYWORDS):
+        return True
+    if not isinstance(extracted, dict):
+        return False
+    if extracted.get("nutrition_table"):
+        return True
+    for key in (
+        "food_name", "ingredients", "net_content", "production_date", "shelf_life",
+        "license_no", "standard_code", "nutrition_warning",
+    ):
+        v = extracted.get(key)
+        if isinstance(v, str) and v.strip():
             return True
     return False
 
@@ -147,7 +172,16 @@ async def analyze_steps(data_urls: list[str]):
         # 纯文本识读偶发返回空结构时，至少保留 OCR 草稿，避免前端“识读内容”空白。
         extracted = {"other_text": ocr_draft[:6000]}
     is_label = extracted_doc.get("is_food_label")
+    if is_label is False and _looks_like_food_label(ocr_draft, extracted):
+        # 明显包含食品标签特征时，覆盖模型 false，继续按食品标签流程处理。
+        is_label = True
     label_type = extracted_doc.get("label_type", "")
+    if is_label is False and ocr_draft.strip():
+        # 线上实测会出现：OCR 有文本但模型误判 not_a_label。
+        # 这里采用“宁可进入复核也不漏检”的策略：有文本就继续走食品标签流程。
+        is_label = True
+        if not label_type:
+            label_type = "疑似食品标签（自动进入复核）"
     yield {
         "step": 2, "stage": "extract", "status": "done",
         "is_food_label": is_label, "label_type": label_type,
