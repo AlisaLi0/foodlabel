@@ -333,8 +333,9 @@ def analyze_system() -> str:
             "",
             "要求：",
             "1) 对下面每一条强制检查项给出判定，并**引用具体标准条款**说明依据：",
-            "   status 取值：pass=满足；fail=明确违反或缺失强制项；warn=表述不规范/疑似问题需复核；"
-            "na=对本商品不适用；unknown=信息不足无法判断。",
+            "   status 取值：pass=满足；miss=强制项完全缺失/未标注；fail=已标注但明确不符合标准要求；"
+            "warn=表述不规范/疑似问题需复核；na=对本商品不适用；unknown=信息不足无法判断。",
+            "   **区分 miss 与 fail**：标签上完全没有该内容 → miss；有但写错/格式不对/不规范 → fail。",
             "   **凡上一步『适用规则』中 applicable=false 的检查项，一律判为 na**，不计入缺失/问题。",
             "2) 仅对『适用』的检查项，在 problems / risks / missing 三类里给出**详尽**的问题点：",
             "   - missing（缺失点）：强制标示内容缺失（如缺生产日期、缺某营养素、缺致敏物提示等）；",
@@ -350,9 +351,9 @@ def analyze_system() -> str:
             "只输出一个 JSON 对象（不要 markdown、不要解释文字）：",
             "{",
             '  "checks": [',
-            "    // 只列出**有问题或不适用**的检查项（status 为 fail/warn/na/unknown）；",
+            "    // 只列出**有问题或不适用**的检查项（status 为 miss/fail/warn/na/unknown）；",
             "    // 满足要求(pass)的项不必列出，系统会自动补全为 pass。",
-            '    {"id":"date","category":"GB7718","item":"日期标示","status":"fail",',
+            '    {"id":"date","category":"GB7718","item":"日期标示","status":"miss",',
             '     "finding":"结合标签字段的具体说明","basis":"GB 7718-2025 4.7"}, ...',
             "  ],",
             '  "missing":  [ {"item":"缺失项","detail":"说明","basis":"条款","suggestion":"整改建议"}, ... ],',

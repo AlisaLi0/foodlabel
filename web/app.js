@@ -24,7 +24,7 @@ const reportEl = $("report");
 let files = []; // {file, url}
 
 const STATUS_LABEL = {
-  pass: "符合", fail: "不符合", warn: "需复核", na: "不适用", unknown: "看不清",
+  pass: "符合", miss: "缺失", fail: "不符合", warn: "需复核", na: "不适用", unknown: "看不清",
 };
 const VERDICT_LABEL = {
   compliant: "标签基本符合国家标准要求",
@@ -314,10 +314,10 @@ function renderRules(rules, checks) {
       note = a.reason || "";
     } else if (c) {
       const st = (c.status || "unknown").toLowerCase();
-      const cls = ["pass", "fail", "warn", "na", "unknown"].includes(st) ? st : "unknown";
+      const cls = ["pass", "miss", "fail", "warn", "na", "unknown"].includes(st) ? st : "unknown";
       resTag = `<span class="b ${cls}">${STATUS_LABEL[cls]}</span>`;
       note = c.finding || a.reason || "";
-      rowcls = st === "fail" ? "row-fail" : st === "warn" ? "row-warn" : "";
+      rowcls = (st === "miss" || st === "fail") ? "row-fail" : st === "warn" ? "row-warn" : "";
     } else {
       // 第 3 步阶段：尚未评价
       resTag = `<span class="b pending">\u5f85\u8bc4\u4ef7</span>`;
@@ -343,7 +343,7 @@ function renderVerdict(data) {
   v.className = "verdict v-" + verdict;
   let score = "";
   if (typeof summary.score === "number") score = `<span class="score">合规评分 ${summary.score}/100</span>`;
-  const counts = `符合 ${summary.pass || 0} · 不符合 ${summary.fail || 0} · 需复核 ${summary.warn || 0}`;
+  const counts = `符合 ${summary.pass || 0} · 缺失 ${summary.miss || 0} · 不符合 ${summary.fail || 0} · 需复核 ${summary.warn || 0}`;
   v.innerHTML = `${score}${esc(VERDICT_LABEL[verdict] || verdict)}<div class="sub" style="font-weight:400;font-size:13px;margin-top:4px;">${counts}</div>`;
 }
 

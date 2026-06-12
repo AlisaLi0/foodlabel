@@ -303,7 +303,7 @@ def normalize(result: dict, applicable: dict[str, dict] | None = None) -> dict:
             if rule and not rule.get("applicable", True):
                 c["status"] = "na"
                 c["finding"] = rule.get("reason", "该项对本商品不适用")
-    counts = {"pass": 0, "fail": 0, "warn": 0, "na": 0, "unknown": 0}
+    counts = {"pass": 0, "miss": 0, "fail": 0, "warn": 0, "na": 0, "unknown": 0}
     for c in checks:
         st = str(c.get("status", "unknown")).lower()
         if st not in counts:
@@ -316,12 +316,13 @@ def normalize(result: dict, applicable: dict[str, dict] | None = None) -> dict:
     if not isinstance(summary, dict):
         summary = {}
     summary.setdefault("pass", counts["pass"])
+    summary.setdefault("miss", counts["miss"])
     summary.setdefault("fail", counts["fail"])
     summary.setdefault("warn", counts["warn"])
     if not summary.get("verdict"):
         if result.get("is_food_label") is False:
             summary["verdict"] = "not_a_label"
-        elif counts["fail"]:
+        elif counts["miss"] or counts["fail"]:
             summary["verdict"] = "non_compliant"
         elif counts["warn"]:
             summary["verdict"] = "issues"

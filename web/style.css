@@ -171,6 +171,7 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
   font-size: 12px; padding: 2px 9px; border-radius: 999px; color: #fff; font-weight: 600;
 }
 .b.pass { background: var(--pass); }
+.b.miss { background: #e05c00; }
 .b.fail { background: var(--fail); }
 .b.warn { background: var(--warn); }
 .b.na { background: var(--na); }
