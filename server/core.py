@@ -26,6 +26,7 @@ from .standards import (
     analyze_system,
     applicable_for,
     category_info,
+    evaluate_checks,
     extract_system,
     rules_system,
 )
@@ -274,27 +275,24 @@ async def analyze_steps(data_urls: list[str]):
         "elapsed": round(time.perf_counter() - t0, 1),
     }
 
-    # ── 步骤 4：基于适用规则做合规评价（缺失/问题/风险）──
+    # ── 步骤 4：基于适用规则做确定性合规评价（规则引擎，不调 LLM）──
+    # 法律合规判定要求确定性：同一识读结果永远得到同一结论，不受模型采样波动影响。
     yield {"step": 4, "stage": "analyze", "status": "started", "label": "合规评价"}
     t0 = time.perf_counter()
-    applicable_text = "\n".join(
-        f"- {a['id']}（{_ITEM_BY_ID[a['id']]}）：{'适用' if a['applicable'] else '不适用→判 na'}（{a['reason']}）"
-        for a in applicable_list(applicable)
+    checks = evaluate_checks(extracted, ocr_draft, applicable)
+    missing, problems, risks = _findings_from_checks(checks)
+    result = normalize(
+        {
+            "is_food_label": is_label,
+            "label_type": label_type,
+            "extracted": extracted,
+            "checks": checks,
+            "missing": missing,
+            "problems": problems,
+            "risks": risks,
+        },
+        applicable=applicable,
     )
-    analyze_user = (
-        "食品类目：" + cat.get("name", "") + "（" + cat.get("basis", "") + "）\n"
-        "适用规则（不适用项一律判 na，不计入缺失/问题）：\n" + applicable_text + "\n\n"
-        "标签原始识别文本（OCR 原文；判定引导词、排列顺序、标示位置等格式问题以此为准）：\n"
-        + (ocr_draft[:6000] if ocr_draft else "（无）") + "\n\n"
-        "已识读出的结构化字段（JSON）：\n" + json.dumps(
-            {"label_type": label_type, "extracted": extracted}, ensure_ascii=False
-        )
-    )
-    analysis = await llm.reason_json(analyze_system(), analyze_user)
-    analysis.setdefault("extracted", extracted)
-    analysis.setdefault("is_food_label", is_label)
-    analysis.setdefault("label_type", label_type)
-    result = normalize(analysis, applicable=applicable)
     result["ocr_results"] = ocr_results
     result["rules"] = rules_meta
     yield {
@@ -325,6 +323,38 @@ async def analyze_data_urls(data_urls: list[str]) -> dict:
 def applicable_list(applicable: dict[str, dict]) -> list[dict]:
     """把 applicable_for 的 dict 转成保持 CHECKLIST 顺序的列表。"""
     return [{"id": c["id"], **applicable[c["id"]]} for c in CHECKLIST if c["id"] in applicable]
+
+
+def _findings_from_checks(checks: list[dict]) -> tuple[list, list, list]:
+    """从确定性判定的 checks 派生 缺失/问题/风险 三类清单（供前端展示）。
+
+    miss → 缺失点；fail → 问题点；warn → 风险点。保持 CHECKLIST 顺序。
+    """
+    missing, problems, risks = [], [], []
+    for c in checks:
+        st = c.get("status")
+        entry = {
+            "item": c.get("item", ""),
+            "detail": c.get("finding", ""),
+            "basis": c.get("basis", ""),
+            "suggestion": c.get("suggestion", ""),
+        }
+        if st == "miss":
+            missing.append(entry)
+        elif st == "fail":
+            problems.append(entry)
+        elif st == "warn":
+            risks.append({**entry, "level": "medium"})
+    return missing, problems, risks
+
+
+def _compute_score(counts: dict) -> int:
+    """按各状态计数确定性算合规评分（0-100）：fail/miss 各扣 8，warn 扣 3，unknown 扣 2。"""
+    total = counts["pass"] + counts["miss"] + counts["fail"] + counts["warn"] + counts["unknown"]
+    if total <= 0:
+        return 0
+    deduct = counts["fail"] * 8 + counts["miss"] * 8 + counts["warn"] * 3 + counts["unknown"] * 2
+    return max(0, 100 - deduct)
 
 
 def normalize(result: dict, applicable: dict[str, dict] | None = None) -> dict:
@@ -379,6 +409,7 @@ def normalize(result: dict, applicable: dict[str, dict] | None = None) -> dict:
     summary.setdefault("miss", counts["miss"])
     summary.setdefault("fail", counts["fail"])
     summary.setdefault("warn", counts["warn"])
+    summary.setdefault("score", _compute_score(counts))
     if not summary.get("verdict"):
         if result.get("is_food_label") is False:
             summary["verdict"] = "not_a_label"

@@ -228,6 +228,158 @@ def applicable_for(category_id: str, scope: str = "domestic") -> dict[str, dict]
     return out
 
 
+# ── 确定性合规判定规则引擎（不依赖 LLM，保证同一输入永远得到同一结论）──
+
+# 八大类致敏物关键词（GB 7718-2025 附录 D），用于在配料文本中确定性检出。
+_ALLERGEN_TERMS = (
+    "小麦", "大麦", "燕麦", "黑麦", "麸质", "面筋",
+    "虾", "蟹", "龙虾",
+    "鳕鱼", "三文鱼", "金枪鱼", "鱼露",
+    "鸡蛋", "蛋清", "蛋黄", "蛋白粉",
+    "花生", "大豆", "黄豆",
+    "牛奶", "奶粉", "奶油", "酪蛋白", "乳清", "乳粉",
+    "杏仁", "核桃", "腰果", "开心果", "榛子", "巴旦木", "夏威夷果",
+)
+
+# 营养成分表强制标示的 7 项（GB 28050-2025 4.1，"1+6"）。
+# 每项：(显示名, 命中关键词, 排除词)。排除词避免"脂肪"命中"饱和脂肪"、"糖"命中"碳水化合物"。
+_MANDATORY_NUTRIENTS = [
+    ("能量", ("能量",), ()),
+    ("蛋白质", ("蛋白质",), ()),
+    ("脂肪", ("脂肪",), ("饱和", "反式", "单不饱和", "多不饱和")),
+    ("饱和脂肪酸", ("饱和脂肪",), ()),
+    ("碳水化合物", ("碳水",), ()),
+    ("糖", ("糖",), ("碳水",)),
+    ("钠", ("钠",), ()),
+]
+
+# 范围值/非具体数值的符号（GB 28050-2025：含量须用具体数值，不得用范围值）。
+_RANGE_SIGNS = ("≤", "≥", "<", ">", "~", "〜", "—", "至", "约", "≈")
+
+# 明令禁止的声称用语（GB 7718-2025 4.4）。
+_BANNED_CLAIMS = ("零添加", "0添加", "无添加", "不添加", "纯天然")
+
+# 暗示保健/治疗功能的高风险词（非保健食品不得明示/暗示）。
+_FUNCTION_CLAIM_TERMS = (
+    "防癌", "抗癌", "治疗", "治愈", "预防疾病", "降血压", "降血脂", "降血糖",
+    "增强免疫", "提高免疫", "壮阳", "补肾", "减肥", "瘦身", "排毒",
+)
+
+
+def _txt(v) -> str:
+    return v if isinstance(v, str) else ""
+
+
+def _has(v) -> bool:
+    if isinstance(v, str):
+        return bool(v.strip())
+    if isinstance(v, (list, dict)):
+        return bool(v)
+    return False
+
+
+def _mk(c: dict, status: str, finding: str = "", suggestion: str = "") -> dict:
+    return {
+        "id": c["id"], "category": c["category"], "item": c["item"],
+        "status": status, "finding": finding, "suggestion": suggestion,
+        "basis": c["basis"],
+    }
+
+
+def evaluate_checks(extracted: dict, ocr_text: str, applicable: dict[str, dict]) -> list[dict]:
+    """确定性逐项合规判定：基于已识读字段 + OCR 原文，按国标规则给 status/finding/suggestion。
+
+    完全不调用 LLM，保证同一输入永远得到同一结论（法律合规判定要求确定性）。
+    不适用项（applicable=false）按规则映射判 na。返回覆盖全部 CHECKLIST 的列表。
+    判定原则：能确证的才判 miss/fail；有歧义的判 warn 提示人工复核；其余 pass。
+    """
+    ex = extracted if isinstance(extracted, dict) else {}
+    ocr = _txt(ocr_text)
+    ing = _txt(ex.get("ingredients")) + " " + _txt(ex.get("additives"))
+    ing_all = ing + " " + ocr  # 配料判定也参考 OCR 原文
+    table = ex.get("nutrition_table") if isinstance(ex.get("nutrition_table"), list) else []
+    names = [_txt(r.get("name")) for r in table if isinstance(r, dict)]
+    values = " ".join(_txt(r.get("value")) for r in table if isinstance(r, dict))
+
+    def has_nutrient(kws, excl) -> bool:
+        return any(any(k in n for k in kws) and not any(e in n for e in excl) for n in names)
+
+    out: list[dict] = []
+    for c in CHECKLIST:
+        cid = c["id"]
+        rule = applicable.get(cid) if applicable else None
+        if rule and not rule.get("applicable", True):
+            out.append(_mk(c, "na", rule.get("reason", "该项对本商品不适用")))
+            continue
+        status, finding, suggestion = "pass", "", ""
+
+        if cid == "name":
+            if not _has(ex.get("food_name")):
+                status, finding, suggestion = "miss", "未识读到食品名称", "在醒目位置标示反映食品真实属性的名称"
+        elif cid == "ingredients":
+            if not _has(ex.get("ingredients")):
+                status, finding, suggestion = "miss", "未标示配料表", "标示以『配料』或『配料表』引导、按加入量递减排列的配料清单"
+        elif cid == "net_content":
+            if not _has(ex.get("net_content")):
+                status, finding, suggestion = "miss", "未标示净含量", "与食品名称在同一展示版面标示净含量"
+        elif cid == "producer":
+            if _has(ex.get("producer")) and _has(ex.get("address")):
+                pass
+            elif _has(ex.get("producer")) or _has(ex.get("address")):
+                status, finding, suggestion = "fail", "生产者/经营者信息不完整（应含名称、地址、联系方式）", "补全生产者名称、地址及联系方式"
+            else:
+                status, finding, suggestion = "miss", "未标示生产者/经营者信息", "标示生产者和/或经营者的名称、地址和联系方式"
+        elif cid == "date":
+            if not (_has(ex.get("production_date")) or _has(ex.get("shelf_life")) or _has(ex.get("expiry_date"))):
+                status, finding, suggestion = "miss", "未标示生产日期/保质期", "按年月日顺序标示生产日期和保质期"
+        elif cid == "storage":
+            if not _has(ex.get("storage")):
+                status, finding, suggestion = "miss", "未标示贮存条件", "标示贮存条件（常温/冷藏/冷冻/避光等）"
+        elif cid == "license":
+            lic = _txt(ex.get("license_no")).strip()
+            up = lic.upper()
+            if not lic:
+                status, finding, suggestion = "miss", "未标示食品生产许可证编号", "标示 SC 开头的食品生产许可证编号"
+            elif "QS" in up and "SC" not in up:
+                status, finding, suggestion = "fail", f"使用旧版 QS 编号（{lic}），未使用现行 SC 编号", "更换为现行 SC 开头的食品生产许可证编号"
+        elif cid == "std_code":
+            if not _has(ex.get("standard_code")):
+                status, finding, suggestion = "miss", "未标示产品标准代号", "标示所执行的产品标准代号和顺序号"
+        elif cid == "allergen":
+            hit = list(dict.fromkeys(t for t in _ALLERGEN_TERMS if t in ing))
+            warned = any(k in ing_all for k in ("致敏", "过敏"))
+            if hit and not warned:
+                status, finding, suggestion = "warn", "配料疑含致敏物（" + "、".join(hit) + "），未见明确致敏物提示，建议核实", "在配料表中或其临近位置加注致敏物提示"
+        elif cid == "claims":
+            ctext = _txt(ex.get("claims")) + " " + ocr
+            banned = [w for w in _BANNED_CLAIMS if w in ctext]
+            func = [w for w in _FUNCTION_CLAIM_TERMS if w in ctext]
+            if banned:
+                status, finding, suggestion = "fail", "使用了禁止的声称用语：" + "、".join(banned), "删除『不添加/零添加/纯天然』等禁用表述（GB 7718-2025 4.4）"
+            elif func:
+                status, finding, suggestion = "warn", "疑似含保健/功能性暗示用语：" + "、".join(func) + "，需人工复核", "非保健食品不得明示或暗示保健功能、防治疾病作用"
+        elif cid == "nutrition_table":
+            if not table:
+                status, finding, suggestion = "miss", "未标示营养成分表", "以方框表标示能量及核心营养素含量与 NRV%"
+            else:
+                miss_n = [label for label, kws, excl in _MANDATORY_NUTRIENTS if not has_nutrient(kws, excl)]
+                if miss_n:
+                    status, finding, suggestion = "fail", "缺少强制标示的营养素项：" + "、".join(miss_n), "补全能量、蛋白质、脂肪、饱和脂肪酸、碳水化合物、糖、钠共 7 项及 NRV%"
+        elif cid == "nutrition_warning":
+            if not (_has(ex.get("nutrition_warning")) or "盐油糖" in ocr or "避免过量摄入" in ocr):
+                status, finding, suggestion = "miss", "未见『儿童青少年应避免过量摄入盐油糖』提示语", "在营养成分表下方标示盐油糖提示语"
+        elif cid == "trans_fat":
+            if "氢化" in ing_all and not any("反式" in n for n in names):
+                status, finding, suggestion = "miss", "配料使用氢化/部分氢化油脂，但营养成分表未标示反式脂肪酸含量", "在营养成分表中标示反式脂肪酸含量"
+        elif cid == "nutrition_value_form":
+            bad = [s for s in _RANGE_SIGNS if s in values]
+            if table and bad:
+                status, finding, suggestion = "fail", "营养成分含量疑似使用范围值/非具体数值（" + "、".join(bad) + "）", "营养成分含量须用具体数值标示，不得用范围值"
+        # additives / quality_grade / fortifier：存在性默认合规，规范性属语义不强判
+        out.append(_mk(c, status, finding, suggestion))
+    return out
+
+
 def _categories_text() -> str:
     return "\n".join(f"- [{c['id']}] {c['name']}（依据 {c['basis']}）：{c['desc']}" for c in FOOD_CATEGORIES)
 
