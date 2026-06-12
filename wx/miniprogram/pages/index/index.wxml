@@ -1,0 +1,42 @@
+<view class="page">
+  <view class="hero card">
+    <view class="hero-title">食品标签国标合规检查</view>
+    <view class="hero-sub muted">上传预包装食品标签照片，自动识读文字并对照
+      GB 7718-2025 / GB 28050-2025 逐项判断是否合规。</view>
+  </view>
+
+  <view class="card">
+    <view wx:if="{{!tempFilePath}}" class="picker" bindtap="onChooseImage">
+      <view class="picker-plus">＋</view>
+      <view class="picker-text">选择 / 拍摄标签照片</view>
+      <view class="muted picker-hint">支持 JPG / PNG / WebP，单张 ≤ 8MB</view>
+    </view>
+
+    <view wx:else class="preview">
+      <image class="preview-img" src="{{tempFilePath}}" mode="widthFix" />
+      <view wx:if="{{!submitting}}" class="preview-remove" bindtap="onRemoveImage">×</view>
+    </view>
+
+    <view wx:if="{{submitting}}" class="steps">
+      <view wx:for="{{stepLabels}}" wx:key="*this"
+            class="step {{index < step ? 'done' : ''}} {{index === step ? 'active' : ''}}">
+        <view class="dot">{{index + 1}}</view>
+        <view class="lbl">{{item}}</view>
+      </view>
+    </view>
+
+    <view wx:if="{{statusText}}" class="status muted">{{statusText}}</view>
+
+    <button class="btn primary submit" bindtap="onSubmit" disabled="{{!canSubmit}}" loading="{{submitting}}">
+      {{submitting ? '检查中…' : '开始检查'}}
+    </button>
+
+    <view class="credits muted" wx:if="{{credits !== null}}">剩余免费次数：{{credits}}</view>
+  </view>
+
+  <view class="card tips">
+    <view class="tips-title">说明</view>
+    <view class="muted tips-line">· 结果对照现行国家标准自动生成，仅供参考，不构成监管结论或法律意见。</view>
+    <view class="muted tips-line">· 相关标准 2027-03-16 正式实施。</view>
+  </view>
+</view>

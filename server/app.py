@@ -31,7 +31,7 @@ from fastapi.staticfiles import StaticFiles
 # isinstance 判定要用 starlette 的基类，否则恒为 False。
 from starlette.datastructures import UploadFile
 
-from . import core, llm
+from . import core, llm, wxauth
 from .standards import CHECKLIST, STANDARDS
 
 HOST = os.getenv("FOODLABEL_HOST", "127.0.0.1")
@@ -255,6 +255,148 @@ async def check_stream(request: Request):
         gen(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ───────────────────────────── 微信小程序接口 ─────────────────────────────
+# 复用上面的后台任务（_JOBS/_run_job），小程序无法用 SSE，改用 上传起任务 + 轮询结果。
+wxauth.init_db()
+
+
+def _wx_guard(request: Request):
+    """未配 AppID/Secret 时统一 503；wx 鉴权错误转对应状态码。返回 (openid|None, error_response|None)。"""
+    if not wxauth.wx_enabled():
+        return None, JSONResponse({"error": "小程序后端未配置。"}, status_code=503)
+    try:
+        openid = wxauth.auth_openid(
+            request.headers.get("authorization"), request.headers.get("x-wx-token")
+        )
+        return openid, None
+    except wxauth.WxError as e:
+        return None, JSONResponse({"error": e.message}, status_code=e.status)
+
+
+@app.get("/api/wx/health")
+async def wx_health() -> dict:
+    return {"ok": True, "wx_enabled": wxauth.wx_enabled()}
+
+
+@app.post("/api/wx/login")
+async def wx_login(request: Request) -> JSONResponse:
+    if not wxauth.wx_enabled():
+        return JSONResponse({"error": "小程序后端未配置。"}, status_code=503)
+    data = await request.json()
+    code = (data or {}).get("code")
+    if not code:
+        return JSONResponse({"error": "缺少 code"}, status_code=400)
+    try:
+        sess = await wxauth.jscode2session(code)
+    except wxauth.WxError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status)
+    openid = sess["openid"]
+    user = wxauth.ensure_user(openid, sess.get("unionid"))
+    return JSONResponse(
+        {"token": wxauth.sign_token(openid), "credits": user["credits"], "openid_short": openid[:8]}
+    )
+
+
+@app.get("/api/wx/me")
+async def wx_me(request: Request) -> JSONResponse:
+    openid, err = _wx_guard(request)
+    if err:
+        return err
+    user = wxauth.ensure_user(openid)
+    return JSONResponse(
+        {
+            "credits": user["credits"],
+            "share_claimed_today": (user.get("share_date") or "") == wxauth._today(),
+            "share_reward_amount": wxauth.SHARE_REWARD,
+            "cost_per_check": wxauth.COST_PER_CHECK,
+        }
+    )
+
+
+@app.post("/api/wx/share-reward")
+async def wx_share_reward(request: Request) -> JSONResponse:
+    openid, err = _wx_guard(request)
+    if err:
+        return err
+    try:
+        return JSONResponse(wxauth.claim_share_reward(openid))
+    except wxauth.WxError as e:
+        return JSONResponse({"error": e.message}, status_code=e.status)
+
+
+@app.post("/api/wx/check")
+async def wx_check(request: Request) -> JSONResponse:
+    """小程序上传图片起检查任务：扣额度 → 起后台任务 → 返回 job_id。结果走 /api/wx/result 轮询。"""
+    openid, err = _wx_guard(request)
+    if err:
+        return err
+    wxauth.ensure_user(openid)
+
+    items = await _read_uploads(request)
+    try:
+        data_urls = core.prepare_items(items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES)
+    except core.InputError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    balance = wxauth.deduct(openid, wxauth.COST_PER_CHECK, "check")
+    if balance is None:
+        return JSONResponse(
+            {"error": "免费次数已用完，请明天再来或分享获取。", "credits": 0}, status_code=402
+        )
+
+    _gc_jobs()
+    job_id = uuid.uuid4().hex
+    _JOBS[job_id] = {
+        "events": [], "done": False, "owner": openid,
+        "created": time.time(), "updated": time.time(),
+        "cond": asyncio.Condition(),
+    }
+    asyncio.create_task(_run_job(job_id, data_urls))
+    return JSONResponse({"job_id": job_id, "credits": balance})
+
+
+@app.get("/api/wx/result")
+async def wx_result(request: Request) -> JSONResponse:
+    """轮询任务进度与结果：返回当前步数 + 识读/规则/最终报告，便于小程序逐步渲染。"""
+    openid, err = _wx_guard(request)
+    if err:
+        return err
+    job_id = request.query_params.get("job_id", "")
+    job = _JOBS.get(job_id)
+    if job is None:
+        return JSONResponse({"error": "任务不存在或已过期。"}, status_code=404)
+    if job.get("owner") and job["owner"] != openid:
+        return JSONResponse({"error": "无权访问该任务。"}, status_code=403)
+
+    events = list(job["events"])
+    extract = rules = result = error = None
+    for e in events:
+        st, status = e.get("stage"), e.get("status")
+        if st == "error":
+            error = e.get("error")
+        elif st == "extract" and status == "done":
+            extract = {
+                "is_food_label": e.get("is_food_label"),
+                "label_type": e.get("label_type"),
+                "extracted": e.get("extracted"),
+            }
+        elif st == "rules" and status == "done":
+            rules = e.get("rules")
+        elif st == "done" and status == "done":
+            result = e.get("result")
+
+    # 检查整体失败：退还本次扣费（仅退一次）。
+    if error and not job.get("refunded"):
+        job["refunded"] = True
+        wxauth.refund(openid, wxauth.COST_PER_CHECK, "check_failed")
+
+    step = max([e.get("step", 0) for e in events if e.get("status") == "done"], default=0)
+    return JSONResponse(
+        {"done": bool(job["done"]), "step": step, "extract": extract,
+         "rules": rules, "result": result, "error": error}
     )
 
 

@@ -1,0 +1,19 @@
+.page { padding-bottom: 48rpx; }
+
+.credits-card { text-align: center; padding: 48rpx 28rpx; }
+.credits-num { font-size: 72rpx; font-weight: 700; color: var(--brand); line-height: 1.2; margin: 12rpx 0; }
+.credits-tip { font-size: 24rpx; }
+
+.row, .row-btn {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 26rpx 0; border-bottom: 1rpx solid #f0f1f3;
+  background: transparent; line-height: 1.4;
+}
+.row-btn { width: 100%; border-radius: 0; text-align: left; }
+.row-btn::after { border: none; }
+.row:last-child, .row-btn:last-child { border-bottom: none; }
+.row-t { font-size: 30rpx; font-weight: 500; }
+.row-s { font-size: 24rpx; margin-top: 6rpx; }
+.row-arrow { color: #c0c4cc; font-size: 40rpx; }
+
+.disclaimer { margin: 28rpx 24rpx; font-size: 22rpx; line-height: 1.7; }

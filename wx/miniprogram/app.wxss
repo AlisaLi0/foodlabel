@@ -1,0 +1,38 @@
+/* 全局样式 */
+page {
+  --brand: #1a7f37;
+  --brand-d: #15622b;
+  --ink: #1f2328;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --fail: #c2362f;
+  --miss: #e05c00;
+  --warn: #b7791f;
+  background: #f4f5f7;
+  color: var(--ink);
+  font-size: 28rpx;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  margin: 24rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 92rpx;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+.btn.primary { background: var(--brand); color: #fff; }
+.btn.primary[disabled] { background: #c5d8cb; color: #fff; }
+.btn.ghost { background: #f0f1f3; color: var(--ink); }
+
+.muted { color: var(--muted); }

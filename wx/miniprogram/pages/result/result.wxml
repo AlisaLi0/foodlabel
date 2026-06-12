@@ -1,0 +1,85 @@
+<view class="page" wx:if="{{verdict}}">
+  <!-- 结论 -->
+  <view class="verdict v-{{verdict.cls}}">
+    <view class="verdict-main">{{verdict.text}}</view>
+    <view class="verdict-sub">
+      <text wx:if="{{score !== null}}" class="score">合规评分 {{score}}/100</text>
+      <text class="counts">{{counts}}</text>
+    </view>
+  </view>
+
+  <!-- 识读内容 -->
+  <view class="card">
+    <view class="card-h">识读到的标签内容</view>
+    <view wx:if="{{fields.length}}" class="kv">
+      <view wx:for="{{fields}}" wx:key="k" class="kv-row">
+        <view class="kv-k muted">{{item.label}}</view>
+        <view class="kv-v">{{item.val}}</view>
+      </view>
+    </view>
+    <view wx:else class="muted">未识读到结构化字段。</view>
+
+    <view wx:if="{{nutrition.length}}" class="nutri">
+      <view class="nutri-h">营养成分表</view>
+      <view class="nutri-row nutri-head">
+        <text class="nc1">项目</text><text class="nc2">每100g/份</text><text class="nc3">NRV%</text>
+      </view>
+      <view wx:for="{{nutrition}}" wx:key="name" class="nutri-row">
+        <text class="nc1">{{item.name}}</text><text class="nc2">{{item.value}}</text><text class="nc3">{{item.nrv}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 适用规则与合规检查 -->
+  <view class="card">
+    <view class="card-h">适用规则与合规检查 <text class="cat muted" wx:if="{{catName}}">{{catName}}</text></view>
+    <view class="rules">
+      <view wx:for="{{rows}}" wx:key="id" class="rule {{item.rowCls}}">
+        <view class="rule-top">
+          <view class="rule-item">{{item.item}}</view>
+          <view class="badges">
+            <text class="b {{item.appCls}}">{{item.appTxt}}</text>
+            <text class="b {{item.resCls}}">{{item.resTxt}}</text>
+          </view>
+        </view>
+        <view class="rule-basis muted">{{item.basis}}</view>
+        <view wx:if="{{item.note}}" class="rule-note">{{item.note}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 缺失 / 问题 / 风险 -->
+  <view class="card" wx:if="{{missing.length}}">
+    <view class="card-h fail-h">缺失点（应标而未标）</view>
+    <view wx:for="{{missing}}" wx:key="item" class="finding">
+      <view class="f-item">{{item.item}}</view>
+      <view class="f-detail">{{item.detail}}</view>
+      <view class="f-basis muted">依据：{{item.basis}}</view>
+      <view wx:if="{{item.suggestion}}" class="f-sug">整改建议：{{item.suggestion}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{problems.length}}">
+    <view class="card-h warn-h">问题点（已标示但不规范）</view>
+    <view wx:for="{{problems}}" wx:key="item" class="finding">
+      <view class="f-item">{{item.item}}</view>
+      <view class="f-detail">{{item.detail}}</view>
+      <view class="f-basis muted">依据：{{item.basis}}</view>
+      <view wx:if="{{item.suggestion}}" class="f-sug">整改建议：{{item.suggestion}}</view>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{risks.length}}">
+    <view class="card-h warn-h">风险点</view>
+    <view wx:for="{{risks}}" wx:key="item" class="finding">
+      <view class="f-item">{{item.item}}</view>
+      <view class="f-detail">{{item.detail}}</view>
+      <view class="f-basis muted">依据：{{item.basis}}</view>
+      <view wx:if="{{item.suggestion}}" class="f-sug">整改建议：{{item.suggestion}}</view>
+    </view>
+  </view>
+
+  <view class="disclaimer muted">结果对照现行国家标准自动生成，仅供参考，不构成监管结论或法律意见。</view>
+
+  <button class="btn ghost again" bindtap="onBack">再查一张</button>
+</view>

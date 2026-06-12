@@ -1,0 +1,18 @@
+{
+  "description": "食品标签国标合规检查 小程序",
+  "packOptions": { "ignore": [], "include": [] },
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "newFeature": true,
+    "bigPackageSizeSupport": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "latest",
+  "appid": "TOUCHANGE_APPID",
+  "projectname": "foodlabel-check",
+  "condition": {}
+}

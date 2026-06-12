@@ -1,0 +1,37 @@
+.hero { padding-bottom: 24rpx; }
+.hero-title { font-size: 38rpx; font-weight: 700; }
+.hero-sub { margin-top: 12rpx; line-height: 1.6; font-size: 26rpx; }
+
+.picker {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 360rpx; border: 2rpx dashed var(--line); border-radius: 14rpx; background: #fafafa;
+}
+.picker-plus { font-size: 72rpx; color: var(--brand); line-height: 1; }
+.picker-text { margin-top: 14rpx; font-size: 30rpx; }
+.picker-hint { margin-top: 8rpx; font-size: 24rpx; }
+
+.preview { position: relative; }
+.preview-img { width: 100%; border-radius: 14rpx; display: block; }
+.preview-remove {
+  position: absolute; top: 14rpx; right: 14rpx; width: 56rpx; height: 56rpx;
+  border-radius: 50%; background: rgba(0,0,0,.55); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 40rpx;
+}
+
+.steps { margin-top: 28rpx; display: flex; flex-direction: column; gap: 18rpx; }
+.step { display: flex; align-items: center; gap: 16rpx; opacity: .5; }
+.step.active, .step.done { opacity: 1; }
+.step .dot {
+  width: 44rpx; height: 44rpx; border-radius: 50%; background: #e5e7eb; color: #9aa0a6;
+  display: flex; align-items: center; justify-content: center; font-size: 24rpx; font-weight: 600;
+}
+.step.active .dot { background: var(--brand); color: #fff; }
+.step.done .dot { background: var(--brand); color: #fff; }
+.step .lbl { font-size: 28rpx; }
+
+.status { margin-top: 24rpx; font-size: 26rpx; }
+.submit { margin-top: 28rpx; }
+.credits { margin-top: 18rpx; text-align: center; font-size: 26rpx; }
+
+.tips-title { font-weight: 600; margin-bottom: 12rpx; }
+.tips-line { line-height: 1.7; font-size: 24rpx; }

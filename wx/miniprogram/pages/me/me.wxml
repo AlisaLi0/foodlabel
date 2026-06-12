@@ -1,0 +1,26 @@
+<view class="page">
+  <view class="card credits-card">
+    <view class="muted">剩余免费次数</view>
+    <view class="credits-num">{{credits === null ? '—' : credits}}</view>
+    <view class="muted credits-tip">每日自动补足免费次数</view>
+  </view>
+
+  <view class="card">
+    <button class="row-btn" open-type="share">
+      <view class="row-l">
+        <view class="row-t">分享小程序</view>
+        <view class="row-s muted">
+          {{shareClaimedToday ? '今日已领取奖励' : '分享给好友，+' + shareReward + ' 次'}}
+        </view>
+      </view>
+      <view class="row-arrow">›</view>
+    </button>
+    <view class="row" bindtap="onOpenPrivacy">
+      <view class="row-l"><view class="row-t">隐私说明</view></view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+
+  <view class="disclaimer muted">本工具检查结果仅供参考，对照现行国家标准自动生成，
+    不构成监管结论或法律意见。最终以监管部门与标准原文为准。</view>
+</view>

@@ -1,0 +1,35 @@
+{
+  "__usePrivacyCheck__": true,
+  "pages": [
+    "pages/index/index",
+    "pages/result/result",
+    "pages/me/me",
+    "pages/privacy/privacy"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "食品标签合规检查",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4f5f7",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#71717a",
+    "selectedColor": "#1a7f37",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "检查"
+      },
+      {
+        "pagePath": "pages/me/me",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
