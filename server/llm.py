@@ -31,7 +31,7 @@ SF_API_KEY = os.getenv("SF_API_KEY", "")
 OCR_MODELS = [
     m.strip()
     for m in os.getenv(
-        "SF_OCR_MODELS", "deepseek-ai/DeepSeek-OCR"
+        "SF_OCR_MODELS", "Qwen/Qwen3-VL-8B-Instruct"
     ).split(",")
     if m.strip()
 ]
