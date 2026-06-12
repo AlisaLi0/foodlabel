@@ -342,7 +342,6 @@ function onStepEvent(ev) {
   } else if (ev.stage === "ocr") {
     setStep(1, "done");
     setStepTime(1, ev.elapsed);
-    if (Array.isArray(ev.ocr_results)) renderOcr({ ocr_results: ev.ocr_results, ocr_evaluation: {} });
   } else if (ev.stage === "rules") {
     // 第 3 步完成：展示适用规则（食品类目 + 各项适用/豁免，检查结果列暂为待评价）
     setStep(3, "done");
@@ -364,7 +363,6 @@ function onStepEvent(ev) {
     renderFindings("missing", data.missing);
     renderFindings("problems", data.problems);
     renderFindings("risks", data.risks);
-    renderOcr(data);
     reportEl.hidden = false;
   }
 }
@@ -381,7 +379,6 @@ function clearReport() {
     $(k + "Count").textContent = "0";
   });
   $("suggBox").hidden = true;
-  $("ocrBox").hidden = true;
 }
 
 // 渲染识读字段 + 营养成分表（步骤2完成即可显示）
@@ -491,29 +488,6 @@ function renderFindings(kind, list) {
       ${basis}${sug}
     </li>`;
   }).join("");
-}
-
-// 渲染 OCR 识别过程：各模型原文 + R1 评价分数
-function renderOcr(data) {
-  const box = $("ocrBox");
-  const results = Array.isArray(data.ocr_results) ? data.ocr_results : [];
-  if (!results.length) { box.hidden = true; return; }
-  const evals = (data.ocr_evaluation && data.ocr_evaluation.evaluations) || [];
-  const scoreOf = (m) => {
-    const e = evals.find((x) => x.model === m);
-    return e && (e.score != null) ? e.score : null;
-  };
-  const wrap = $("ocrResults");
-  wrap.innerHTML = results.map((r) => {
-    const name = r.model.split("/").pop();
-    const sc = scoreOf(r.model);
-    const badge = sc != null ? `<span class="score">可信度 ${esc(sc)}</span>` : "";
-    const body = r.error
-      ? `<div class="ocr-err">识别失败：${esc(r.error)}</div>`
-      : `<pre>${esc(r.text || "(无输出)")}</pre>`;
-    return `<div class="ocr-one"><div class="ocr-h">${esc(name)}${badge}</div>${body}</div>`;
-  }).join("");
-  box.hidden = false;
 }
 
 // 顶部显示当前依据的标准
