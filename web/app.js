@@ -513,9 +513,6 @@ function renderOcr(data) {
       : `<pre>${esc(r.text || "(无输出)")}</pre>`;
     return `<div class="ocr-one"><div class="ocr-h">${esc(name)}${badge}</div>${body}</div>`;
   }).join("");
-  const conf = data.ocr_evaluation && data.ocr_evaluation.confidence;
-  $("mergedText").textContent = data.merged_text || "";
-  $("ocrConf").textContent = conf != null ? `融合可信度 ${conf}` : "";
   box.hidden = false;
 }
 
