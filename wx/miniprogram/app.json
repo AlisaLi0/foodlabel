@@ -21,11 +21,15 @@
     "list": [
       {
         "pagePath": "pages/index/index",
-        "text": "检查"
+        "text": "检查",
+        "iconPath": "images/tab/check.png",
+        "selectedIconPath": "images/tab/check_active.png"
       },
       {
         "pagePath": "pages/me/me",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "images/tab/me.png",
+        "selectedIconPath": "images/tab/me_active.png"
       }
     ]
   },
