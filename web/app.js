@@ -58,19 +58,34 @@ function renderThumbs() {
   thumbs.innerHTML = "";
   files.forEach((f, i) => {
     const d = document.createElement("div");
-    d.className = "thumb";
-    d.innerHTML = `<img src="${f.url}" alt=""><button title="移除" data-i="${i}">×</button>`;
+    if (f.kind === "doc") {
+      d.className = "thumb doc";
+      d.innerHTML = `<div class="docicon">页</div><div class="docname">${esc(f.file.name)}</div><button title="移除" data-i="${i}">×</button>`;
+    } else {
+      d.className = "thumb";
+      d.innerHTML = `<img src="${f.url}" alt=""><button title="移除" data-i="${i}">×</button>`;
+    }
     thumbs.appendChild(d);
   });
   runBtn.disabled = files.length === 0;
   resetBtn.hidden = files.length === 0;
 }
 
+// 文档（非图片）判定：按扩展名或 MIME。这些文件已是文字，后端会跳过 OCR 直接比对。
+const DOC_EXT_RE = /\.(pdf|docx?|txt|md|csv)$/i;
+function isDocFile(file) {
+  return DOC_EXT_RE.test(file.name || "") ||
+    /pdf|word|officedocument|^text\//.test(file.type || "");
+}
+
 function addFiles(list) {
   for (const file of list) {
-    if (!file.type.startsWith("image/")) continue;
     if (files.length >= 4) break;
-    files.push({ file, url: URL.createObjectURL(file) });
+    if (file.type && file.type.startsWith("image/")) {
+      files.push({ file, url: URL.createObjectURL(file), kind: "image" });
+    } else if (isDocFile(file)) {
+      files.push({ file, url: "", kind: "doc" });
+    } // 其余类型忽略
   }
   renderThumbs();
 }
@@ -78,7 +93,8 @@ function addFiles(list) {
 thumbs.addEventListener("click", (e) => {
   const i = e.target.getAttribute && e.target.getAttribute("data-i");
   if (i !== null && i !== undefined) {
-    URL.revokeObjectURL(files[i].url);
+    const f = files[Number(i)];
+    if (f && f.url) URL.revokeObjectURL(f.url);
     files.splice(Number(i), 1);
     renderThumbs();
   }
@@ -130,7 +146,7 @@ window.addEventListener("paste", (e) => {
 resetBtn.addEventListener("click", () => {
   streamToken++; // 让正在进行的拉流循环失效
   clearJob();
-  files.forEach((f) => URL.revokeObjectURL(f.url));
+  files.forEach((f) => { if (f.url) URL.revokeObjectURL(f.url); });
   files = [];
   renderThumbs();
   reportEl.hidden = true;
@@ -187,7 +203,10 @@ runBtn.addEventListener("click", async () => {
   clearReport();
 
   const fd = new FormData();
-  files.forEach((f) => fd.append("images", f.file, f.file.name));
+  files.forEach((f) => {
+    if (f.kind === "doc") fd.append("docs", f.file, f.file.name);
+    else fd.append("images", f.file, f.file.name);
+  });
 
   try {
     // 先启动后台任务，拿到 job_id（处理脱离本请求，切页/刷新都不中断）。
@@ -324,6 +343,11 @@ function onStepEvent(ev) {
     statusEl.className = "status err";
     statusEl.textContent = "出错了：" + (ev.error || "未知错误");
     return;
+  }
+  // 纯文档输入时后端会把第 1 步 label 改成“读取标签文本”，同步更新进度条文案。
+  if (ev.stage === "ocr" && ev.label) {
+    const s1 = $("steps").querySelector('.step[data-step="1"] .lbl');
+    if (s1) s1.textContent = ev.label;
   }
   const step = ev.step || 0;
   if (ev.status === "started") {

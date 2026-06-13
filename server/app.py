@@ -102,7 +102,7 @@ def _gc_jobs() -> None:
             _JOBS.pop(jid, None)
 
 
-async def _run_job(job_id: str, data_urls: list[str]) -> None:
+async def _run_job(job_id: str, data_urls: list[str], doc_text: str = "") -> None:
     """后台跑分步分析，把事件追加进任务缓冲；与请求连接解耦，断线不影响。"""
     job = _JOBS[job_id]
     cond: asyncio.Condition = job["cond"]
@@ -114,7 +114,7 @@ async def _run_job(job_id: str, data_urls: list[str]) -> None:
             cond.notify_all()
 
     try:
-        async for ev in core.analyze_steps(data_urls):
+        async for ev in core.analyze_steps(data_urls, doc_text):
             await emit(ev)
     except llm.LLMError as e:
         await emit({"stage": "error", "status": "error", "error": f"识别失败：{e}"})
@@ -152,7 +152,7 @@ async def check(request: Request) -> JSONResponse:
 
     items = await _read_uploads(request)
     try:
-        result = await core.check_image_bytes(
+        result = await core.check_inputs(
             items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES
         )
     except core.InputError as e:
@@ -163,17 +163,19 @@ async def check(request: Request) -> JSONResponse:
     return JSONResponse(result)
 
 
-async def _read_uploads(request: Request) -> list[tuple[bytes, str | None]]:
+async def _read_uploads(request: Request) -> list[tuple[bytes, str | None, str | None]]:
     form = await request.form()
+    # 图片走 images 字段、文档（PDF/Word/TXT）走 docs 字段；两者合并后由 core 按类型分流。
     uploads = [v for v in form.getlist("images") if isinstance(v, UploadFile)]
+    uploads += [v for v in form.getlist("docs") if isinstance(v, UploadFile)]
     if not uploads:
         single = form.get("image")
         if isinstance(single, UploadFile):
             uploads = [single]
-    items: list[tuple[bytes, str | None]] = []
+    items: list[tuple[bytes, str | None, str | None]] = []
     for up in uploads:
         raw = await up.read()
-        items.append((raw, (up.content_type or "").lower() or None))
+        items.append((raw, (up.content_type or "").lower() or None, up.filename or None))
     return items
 
 
@@ -189,7 +191,7 @@ async def check_start(request: Request) -> JSONResponse:
 
     items = await _read_uploads(request)
     try:
-        data_urls = core.prepare_items(items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES)
+        data_urls, doc_text = core.prepare_inputs(items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES)
     except core.InputError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
@@ -201,7 +203,7 @@ async def check_start(request: Request) -> JSONResponse:
         "cond": asyncio.Condition(),
     }
     # 后台任务：与请求解耦，客户端断开也照常跑完。
-    asyncio.create_task(_run_job(job_id, data_urls))
+    asyncio.create_task(_run_job(job_id, data_urls, doc_text))
     return JSONResponse({"job_id": job_id})
 
 

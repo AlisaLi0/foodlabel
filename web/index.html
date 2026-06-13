@@ -20,15 +20,16 @@
 
   <main>
     <section class="uploader" id="drop">
-      <p class="lead">上传预包装食品的<strong>标签照片</strong>（可一次上传正面、配料面、营养成分面，最多 4 张），
-        自动识读文字并对照现行国家标准逐项判断是否合规。</p>
-      <input type="file" id="file" accept="image/*" multiple hidden />
+      <p class="lead">上传预包装食品的<strong>标签照片</strong>（最多 4 张，自动识图 OCR），
+        或直接上传 <strong>PDF / Word / TXT</strong> 文本（已是文字则<strong>跳过识图</strong>、直接比对），
+        对照现行国家标准逐项判断是否合规。</p>
+      <input type="file" id="file" accept="image/*,.pdf,.doc,.docx,.txt,.md,.csv" multiple hidden />
       <div class="actions">
-        <button id="pick" class="btn primary">选择图片</button>
+        <button id="pick" class="btn primary">选择图片 / 文档</button>
         <button id="run" class="btn" disabled>开始检查</button>
         <button id="reset" class="btn ghost" hidden>重置</button>
       </div>
-      <div class="hint">支持 JPG / PNG / WebP，单张 ≤ 8 MB。也可直接把图片拖到此区域或粘贴。</div>
+      <div class="hint">图片 JPG/PNG/WebP 走 OCR；文本 PDF/Word/TXT 直接比对。单个 ≤ 8 MB。也可拖拽或粘贴图片。</div>
       <div id="thumbs" class="thumbs"></div>
     </section>
 

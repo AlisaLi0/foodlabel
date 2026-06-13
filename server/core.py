@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import time
 
-from . import llm
+from . import doctext, llm
 from .standards import (
     CHECKLIST,
     analyze_system,
@@ -33,7 +33,10 @@ from .standards import (
 
 # 允许的图片 MIME 类型。
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
+# 图片扩展名，用于浏览器/客户端未带 content-type 时按文件名兜底判定。
+_IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
 DEFAULT_MAX_IMAGES = 4
+DEFAULT_MAX_DOCS = 4
 DEFAULT_MAX_BYTES = 8 * 1024 * 1024
 
 _CHECK_IDS = [c["id"] for c in CHECKLIST]
@@ -131,6 +134,18 @@ def _looks_like_food_label(ocr_text: str, extracted: dict) -> bool:
     return False
 
 
+async def check_inputs(
+    items: list[tuple[bytes, str | None, str | None]],
+    *,
+    max_images: int = DEFAULT_MAX_IMAGES,
+    max_docs: int = DEFAULT_MAX_DOCS,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+) -> dict:
+    """从原始上传（图片 和/或 文档）开始的完整检查，返回规范化报告（非流式）。"""
+    data_urls, doc_text = prepare_inputs(items, max_images=max_images, max_docs=max_docs, max_bytes=max_bytes)
+    return await analyze_data_urls(data_urls, doc_text)
+
+
 async def check_image_bytes(
     items: list[tuple[bytes, str | None]],
     *,
@@ -141,6 +156,57 @@ async def check_image_bytes(
     """从原始图片字节开始的完整检查流程，返回规范化后的合规报告（非流式）。"""
     data_urls = prepare_items(items, max_images=max_images, max_bytes=max_bytes, allowed_types=allowed_types)
     return await analyze_data_urls(data_urls)
+
+
+def prepare_inputs(
+    items: list[tuple[bytes, str | None, str | None]],
+    *,
+    max_images: int = DEFAULT_MAX_IMAGES,
+    max_docs: int = DEFAULT_MAX_DOCS,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+    allowed_types: set[str] | None = None,
+) -> tuple[list[str], str]:
+    """按类型分流上传项：图片→data URL（走 OCR）；文档→提取文本（跳过 OCR）。
+
+    返回 (data_urls, doc_text)。items 为 (字节, content_type, 文件名) 三元组。
+    校验失败招 InputError（上层映射 400）。
+    """
+    allowed = allowed_types or ALLOWED_TYPES
+    if not items:
+        raise InputError("请至少上传一张标签图片，或一个标签文本文件（PDF/Word/TXT）。")
+    data_urls: list[str] = []
+    doc_parts: list[str] = []
+    img_count = doc_count = 0
+    for raw, ctype, fname in items:
+        if not raw:
+            continue
+        if len(raw) > max_bytes:
+            raise InputError(f"单个文件不能超过 {max_bytes // (1024 * 1024)} MB。")
+        ct = (ctype or "").lower()
+        name = (fname or "").lower()
+        is_image = ct in allowed or ct.startswith("image/") or (not ct and name.endswith(_IMAGE_EXTS))
+        if is_image:
+            img_count += 1
+            if img_count > max_images:
+                raise InputError(f"最多一次上传 {max_images} 张图片。")
+            ct_ok = ct if (ct and ct in allowed) else None
+            data_urls.append(llm.prepare_image(raw, ct_ok))
+        elif doctext.is_doc(ct, fname):
+            doc_count += 1
+            if doc_count > max_docs:
+                raise InputError(f"最多一次上传 {max_docs} 个文档。")
+            try:
+                txt = doctext.extract_text(raw, ct or None, fname)
+            except doctext.DocError as e:
+                raise InputError(str(e)) from e
+            if txt and txt.strip():
+                doc_parts.append(f"【{fname or '文档'}】\n{txt.strip()}")
+        else:
+            raise InputError(f"不支持的文件类型：{fname or ct or '未知'}")
+    doc_text = "\n\n".join(doc_parts)
+    if not data_urls and not doc_text:
+        raise InputError("未获得可分析的内容（图片为空或文档无文字）。")
+    return data_urls, doc_text
 
 
 def prepare_items(
@@ -157,7 +223,7 @@ def prepare_items(
     if len(items) > max_images:
         raise InputError(f"最多一次上传 {max_images} 张图片。")
     data_urls: list[str] = []
-    for raw, ctype in items:
+    for raw, ctype, *_rest in items:
         if not raw:
             continue
         if len(raw) > max_bytes:
@@ -171,42 +237,53 @@ def prepare_items(
     return data_urls
 
 
-async def analyze_steps(data_urls: list[str]):
+async def analyze_steps(data_urls: list[str], doc_text: str = ""):
     """分步异步生成器：逐步产出阶段事件，供 SSE 流式逐步返回。
 
+    data_urls：需走 OCR 的图片；doc_text：用户直接上传的文档（PDF/Word/TXT）提取出的
+    文本——已是文字，无需识图，直接当作识读材料。两者可单独或同时提供。
+
     依次 yield 形如 {"step": <编号>, "stage": <名>, "status": started|done, ...} 的事件：
-      1 ocr      OCR 识别（DeepSeek-OCR）
+      1 ocr      OCR 识别（DeepSeek-OCR）；纯文档输入时跳过识图、直接读文本
       2 extract  视觉识读字段 + 营养表（Qwen3.6 看图提取）
       3 analyze  对照国标合规分析（Qwen3.6 基于字段判定）
       4 done     汇总最终报告
     每个 done 事件携带该步的数据；前端据此点亮进度条并逐步渲染。
     """
-    if not data_urls:
-        raise InputError("没有可分析的图片。")
+    if not data_urls and not doc_text:
+        raise InputError("没有可分析的内容。")
 
     t_total = time.perf_counter()
+    doc_only = bool(doc_text) and not data_urls
 
-    # ── 步骤 1：OCR 识别 ──
-    yield {"step": 1, "stage": "ocr", "status": "started", "label": "识别图片"}
+    # ── 步骤 1：识图 OCR（仅图片） + 合并直传文档文本（跳过 OCR）──
+    yield {
+        "step": 1, "stage": "ocr", "status": "started",
+        "label": "读取标签文本" if doc_only else "识别图片",
+    }
     t0 = time.perf_counter()
-    per_image = [await llm.ocr_all(url) for url in data_urls]
     ocr_results: list[dict] = []
-    for model in llm.OCR_MODELS:
-        texts, errs = [], []
-        for img_res in per_image:
-            r = next((x for x in img_res if x["model"] == model), None)
-            if not r:
-                continue
-            if r.get("error"):
-                errs.append(r["error"])
-            if r.get("text"):
-                texts.append(r["text"])
-        ocr_results.append({
-            "model": model,
-            "text": "\n\n---\n\n".join(texts),
-            "error": "; ".join(errs) if errs and not texts else None,
-        })
-    # 多个 OCR 引擎的结果都带上模型标签拼给识读步骤，便于交叉印证、纠错。
+    if data_urls:
+        per_image = [await llm.ocr_all(url) for url in data_urls]
+        for model in llm.OCR_MODELS:
+            texts, errs = [], []
+            for img_res in per_image:
+                r = next((x for x in img_res if x["model"] == model), None)
+                if not r:
+                    continue
+                if r.get("error"):
+                    errs.append(r["error"])
+                if r.get("text"):
+                    texts.append(r["text"])
+            ocr_results.append({
+                "model": model,
+                "text": "\n\n---\n\n".join(texts),
+                "error": "; ".join(errs) if errs and not texts else None,
+            })
+    # 用户直传的文档文本作为一个“来源”混入（未经 OCR），识读步一起参考。
+    if doc_text:
+        ocr_results.append({"model": "文档直接读取（未经 OCR）", "text": doc_text, "error": None})
+    # 各来源结果都带上标签拼给识读步骤，便于交叉印证、纠错。
     ocr_draft = "\n\n".join(
         f"【{r['model']}】\n{r['text']}" for r in ocr_results if r["text"]
     )
@@ -215,16 +292,20 @@ async def analyze_steps(data_urls: list[str]):
         "ocr_results": ocr_results, "elapsed": round(time.perf_counter() - t0, 1),
     }
 
-    # ── 步骤 2：基于 OCR 文本（+ 多模态时附原图）识读字段 + 营养表 ──
+    # ── 步骤 2：基于文本（+ 多模态时附原图）识读字段 + 营养表 ──
     yield {"step": 2, "stage": "extract", "status": "started", "label": "识读内容"}
     t0 = time.perf_counter()
     if not ocr_draft:
-        raise llm.LLMError("OCR 未识别出任何文本，无法识读标签字段。")
-    # 识读模型支持多模态时把原图一并喂入做参考；纯文本模型则只给 OCR 文本。
-    extract_images = data_urls if llm.REASON_VISION else None
+        raise llm.LLMError("未获得任何标签文本，无法识读标签字段。")
+    # 识读模型支持多模态且有图片时把原图一并喂入做参考；纯文本/纯文档则只给文本。
+    extract_images = data_urls if (llm.REASON_VISION and data_urls) else None
     extract_user = (
-        "以下是该食品标签经一个或多个 OCR 引擎识别出的文本"
-        + ("（已附原始标签图片，请以图片为准、OCR 文本作辅助）" if extract_images else "")
+        "以下是该食品标签的文本内容"
+        + (
+            "（由 OCR 识别和/或上传文件读取，可能有错漏、乱序、粘连，已附原始标签图片，请以图片为准、文本作辅助）"
+            if extract_images
+            else "（由 OCR 识别和/或用户上传的标签文件直接读取）"
+        )
         + "，请综合整理出结构化字段 JSON：\n\n"
         + ocr_draft
     )
@@ -332,12 +413,12 @@ async def analyze_steps(data_urls: list[str]):
     }
 
 
-async def analyze_data_urls(data_urls: list[str]) -> dict:
+async def analyze_data_urls(data_urls: list[str], doc_text: str = "") -> dict:
     """非流式封装：跑完分步流程，返回最终报告（供 MCP / 一次性调用）。"""
-    if not data_urls:
-        raise InputError("没有可分析的图片。")
+    if not data_urls and not doc_text:
+        raise InputError("没有可分析的内容。")
     final: dict | None = None
-    async for ev in analyze_steps(data_urls):
+    async for ev in analyze_steps(data_urls, doc_text):
         if ev.get("stage") == "done":
             final = ev.get("result")
     if final is None:
