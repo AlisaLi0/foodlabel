@@ -25,10 +25,21 @@
     .doc-links a.src { border-color: var(--brand); color: #fff; background: var(--brand); }
     .doc-links a.src:hover { background: var(--brand-d); }
     .src-note { color: var(--muted); font-size: 12px; margin: 6px 0 0; line-height: 1.6; }
-    .doctext { white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.9; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
-    .doctext h3 { font-size: 15px; margin: 20px 0 8px; color: var(--brand-d); border-left: 3px solid var(--brand); padding-left: 8px; }
-    .doctext .art { font-weight: 600; }
-    .doctext .q { color: var(--muted); font-size: 13px; }
+    /* 文档正文：仿公文排版（宋体、段落首行缩进、居中封面、章节标题） */
+    .doctext { font-family: "Songti SC", "SimSun", "STSong", Georgia, "Times New Roman", serif; font-size: 15.5px; line-height: 2.0; color: #1b2430; margin-top: 18px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .doctext .doc-cover { text-align: center; margin: 4px 0 28px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+    .doctext .cv-line { font-size: 15px; line-height: 1.9; }
+    .doctext .cv-num { font-size: 17px; letter-spacing: 1px; margin: 6px 0; }
+    .doctext .cv-title { font-size: 23px; font-weight: 700; margin: 10px 0; letter-spacing: 2px; }
+    .doctext .dh3 { font-size: 17px; font-weight: 700; margin: 26px 0 12px; color: var(--ink); }
+    .doctext .dh4 { font-size: 15.5px; font-weight: 700; margin: 18px 0 8px; color: var(--ink); }
+    .doctext .dp { margin: 0 0 13px; text-indent: 2em; text-align: justify; }
+    .doctext .dul { margin: 4px 0 13px; padding: 0; list-style: none; }
+    .doctext .dul li { position: relative; padding-left: 2em; margin: 7px 0; text-align: justify; }
+    .doctext .dul li::before { content: "—"; position: absolute; left: .4em; color: var(--muted); }
+    .doctext .dli2 { text-indent: 2em; margin: 7px 0; text-align: justify; }
+    .doctext .dquote { margin: 0 0 11px; padding: 10px 14px; background: #f5f8fd; border-left: 3px solid var(--brand); color: var(--muted); font-size: 13.5px; line-height: 1.8; text-align: justify; }
+    .doctext .art { font-weight: 700; color: var(--ink); }
     .loading { color: var(--muted); font-size: 13px; padding: 12px 0; }
     .loading.err { color: var(--fail); }
     @media (max-width: 760px) {
