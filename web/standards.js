@@ -6,16 +6,16 @@ const DOCS = [
   {
     id: "gb7718",
     group: "GB 7718-2025 预包装食品标签通则",
-    nav: "标准正文",
-    title: "GB 7718-2025 食品安全国家标准 预包装食品标签通则",
-    sub: "国家卫生健康委、国家市场监督管理总局 · 2025-03-16 发布 · 2027-03-16 实施（代替 GB 7718-2011）",
+    nav: "标准原文（PDF）",
+    title: "预包装食品标签通则 · 标准原文（官方 PDF）",
+    sub: "官方 PDF 原件 · 来源 nhc.gov.cn · ⚠ 此 PDF 为 GB 7718—2011 版（现行官方文本；2025 修订版全文 PDF 官方暂未公开下载）",
     links: [
       { label: "官方问答：GB 7718-2025（卫健委）", url: "https://www.nhc.gov.cn/sps/c100087/202509/bc824a504ec34c27883da73f14c20d44.shtml", src: true },
-      { label: "下载本页文本", url: "docs/gb7718-2025.txt" },
+      { label: "下载 PDF 原件", url: "docs/gb7718-2011.pdf" },
+      { label: "GB 7718-2025 修订版文本", url: "docs/gb7718-2025.txt" },
     ],
-    note: "GB 7718-2025 于 2025-03-27 由国家卫生健康委、国家市场监督管理总局「2025年第2号公告」与其它 49 项标准一同发布。",
-    file: "docs/gb7718-2025.txt",
-    fmt: "txt",
+    note: "",
+    pdf: "docs/gb7718-2011.pdf",
   },
   {
     id: "gb7718-interpret",
@@ -34,16 +34,16 @@ const DOCS = [
   {
     id: "gb28050",
     group: "GB 28050-2025 预包装食品营养标签通则",
-    nav: "标准正文",
-    title: "GB 28050-2025 食品安全国家标准 预包装食品营养标签通则",
-    sub: "国家卫生健康委、国家市场监督管理总局 · 2025-03-16 发布 · 2027-03-16 实施（代替 GB 28050-2011）",
+    nav: "标准原文（PDF）",
+    title: "预包装食品营养标签通则 · 标准原文（官方 PDF）",
+    sub: "官方 PDF 原件 · 来源 nhc.gov.cn · ⚠ 此 PDF 为 GB 28050—2011 版（现行官方文本；2025 修订版全文 PDF 官方暂未公开下载）",
     links: [
       { label: "官方问答：GB 28050-2025（卫健委）", url: "https://www.nhc.gov.cn/sps/c100087/202509/470fa4ff5de14dd38619223cce9da4e7.shtml", src: true },
-      { label: "下载本页文本", url: "docs/gb28050-2025.txt" },
+      { label: "下载 PDF 原件", url: "docs/gb28050-2011.pdf" },
+      { label: "GB 28050-2025 修订版文本", url: "docs/gb28050-2025.txt" },
     ],
-    note: "GB 28050-2025 于 2025-03-27 由国家卫生健康委、国家市场监督管理总局「2025年第2号公告」与其它 49 项标准一同发布。",
-    file: "docs/gb28050-2025.txt",
-    fmt: "txt",
+    note: "",
+    pdf: "docs/gb28050-2011.pdf",
   },
   {
     id: "gb28050-qa",
@@ -246,14 +246,17 @@ function renderDoc(doc) {
   ).join("");
   const note = doc.note ? `<p class="src-note">${esc(doc.note)}</p>` : "";
   const content = document.getElementById("docsContent");
+  const body = doc.pdf
+    ? `<iframe class="pdf-frame" src="${esc(doc.pdf)}#view=FitH" title="${esc(doc.title)}"></iframe>`
+    : `<div class="doctext" id="docText">—</div>`;
   content.innerHTML =
     `<div class="doc-crumb">法规原文<span class="sep">›</span>${esc(doc.group)}</div>` +
     `<h1 class="doc-title">${esc(doc.title)}</h1>` +
     `<p class="doc-meta">${esc(doc.sub)}</p>` +
     `<div class="doc-links">${links}</div>` +
     note +
-    `<div class="doctext" id="docText">—</div>`;
-  loadText(doc, document.getElementById("docText"));
+    body;
+  if (!doc.pdf) loadText(doc, document.getElementById("docText"));
   document.querySelectorAll("#docsNav .nav-item").forEach((a) => {
     a.classList.toggle("active", a.dataset.id === doc.id);
   });
