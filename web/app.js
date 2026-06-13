@@ -34,7 +34,7 @@ const VERDICT_LABEL = {
 };
 const FIELD_LABEL = {
   food_name: "食品名称", ingredients: "配料表", additives: "食品添加剂",
-  net_content: "净含量", spec: "规格", producer: "生产者/经营者",
+  net_content: "净含量", barcode: "条码", spec: "规格", producer: "生产者/经营者",
   address: "地址", contact: "联系方式", production_date: "生产日期",
   shelf_life: "保质期", expiry_date: "保质期到期日", storage: "贮存条件",
   license_no: "生产许可证编号", standard_code: "产品标准代号",
@@ -42,7 +42,7 @@ const FIELD_LABEL = {
   nutrition_warning: "盐油糖提示语", other_text: "其他文字",
 };
 const FIELD_ORDER = [
-  "food_name", "ingredients", "additives", "net_content", "spec",
+  "food_name", "ingredients", "additives", "net_content", "barcode", "spec",
   "producer", "address", "contact", "production_date", "shelf_life",
   "expiry_date", "storage", "license_no", "standard_code", "quality_grade",
   "allergens", "claims", "nutrition_warning", "other_text",
@@ -453,6 +453,8 @@ function onStepEvent(ev) {
 
 // 清空报告各区，准备逐步填充
 function clearReport() {
+  const fp = $("fingerprint");
+  if (fp) { fp.hidden = true; fp.innerHTML = ""; }
   $("verdict").innerHTML = "";
   $("verdict").className = "verdict";
   $("extracted").innerHTML = "";
@@ -465,8 +467,27 @@ function clearReport() {
   $("suggBox").hidden = true;
 }
 
+// 产品指纹：让不同产品的报告一眼可区分（食品名称 · 净含量 · 条码）
+function renderFingerprint(data) {
+  const box = $("fingerprint");
+  if (!box) return;
+  const ex = data.extracted || {};
+  const name = (typeof ex.food_name === "string" ? ex.food_name.trim() : "") || "未识读到名称";
+  const meta = [];
+  const nc = typeof ex.net_content === "string" ? ex.net_content.trim() : "";
+  if (nc) meta.push(esc(nc));
+  const bc = typeof ex.barcode === "string" ? ex.barcode.trim() : "";
+  if (bc) meta.push("条码 " + esc(bc));
+  box.innerHTML =
+    `<span class="fp-tag">产品</span>` +
+    `<span class="fp-name">${esc(name)}</span>` +
+    (meta.length ? `<span class="fp-meta">${meta.join("　·　")}</span>` : "");
+  box.hidden = false;
+}
+
 // 渲染识读字段 + 营养成分表（步骤2完成即可显示）
 function renderExtracted(data) {
+  renderFingerprint(data);
   const ex = data.extracted || {};
   const kv = $("extracted");
   kv.innerHTML = "";

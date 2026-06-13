@@ -13,6 +13,13 @@
     </view>
   </view>
 
+  <!-- 产品指纹：不同产品一眼可区分 -->
+  <view wx:if="{{fingerprint}}" class="fingerprint">
+    <text class="fp-tag">产品</text>
+    <text class="fp-name">{{fingerprint.name}}</text>
+    <text wx:if="{{fingerprint.meta}}" class="fp-meta">{{fingerprint.meta}}</text>
+  </view>
+
   <!-- 识读内容 -->
   <view class="card">
     <view class="card-h">识读到的标签内容</view>

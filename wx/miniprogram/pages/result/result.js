@@ -7,14 +7,14 @@ const VERDICT = {
 const STATUS_LABEL = { pass: '符合', miss: '缺失', fail: '不符合', warn: '需复核', na: '不适用', unknown: '看不清', pending: '待评价' };
 const FIELD_LABEL = {
   food_name: '食品名称', ingredients: '配料表', additives: '食品添加剂',
-  net_content: '净含量', spec: '规格', producer: '生产者/经营者', address: '地址',
+  net_content: '净含量', barcode: '条码', spec: '规格', producer: '生产者/经营者', address: '地址',
   contact: '联系方式', production_date: '生产日期', shelf_life: '保质期',
   expiry_date: '保质期到期日', storage: '贮存条件', license_no: '生产许可证编号',
   standard_code: '产品标准代号', quality_grade: '质量等级', allergens: '致敏物质',
   claims: '声称/强调', nutrition_warning: '盐油糖提示语', other_text: '其他文字',
 };
 const FIELD_ORDER = [
-  'food_name', 'ingredients', 'additives', 'net_content', 'spec', 'producer',
+  'food_name', 'ingredients', 'additives', 'net_content', 'barcode', 'spec', 'producer',
   'address', 'contact', 'production_date', 'shelf_life', 'expiry_date', 'storage',
   'license_no', 'standard_code', 'quality_grade', 'allergens', 'claims',
   'nutrition_warning', 'other_text',
@@ -29,6 +29,7 @@ Page({
     counts: '',
     catName: '',
     previewImage: '',
+    fingerprint: null,
     fields: [],
     nutrition: [],
     rows: [],
@@ -80,6 +81,15 @@ Page({
       .map((k) => ({ k, label: FIELD_LABEL[k] || k, val: ex[k] }));
     const nutrition = Array.isArray(ex.nutrition_table) ? ex.nutrition_table : [];
 
+    // 产品指纹：让不同产品的报告一眼可区分
+    const fpName = (typeof ex.food_name === 'string' ? ex.food_name.trim() : '') || '未识读到名称';
+    const fpMeta = [];
+    const fpNc = typeof ex.net_content === 'string' ? ex.net_content.trim() : '';
+    if (fpNc) fpMeta.push(fpNc);
+    const fpBc = typeof ex.barcode === 'string' ? ex.barcode.trim() : '';
+    if (fpBc) fpMeta.push('条码 ' + fpBc);
+    const fingerprint = { name: fpName, meta: fpMeta.join('　·　') };
+
     // 合并 适用规则 + 检查结果
     const rules = r.rules || {};
     const applicable = Array.isArray(rules.applicable) ? rules.applicable : [];
@@ -110,6 +120,7 @@ Page({
       counts,
       catName: rules.category_name || '',
       fields, nutrition, rows,
+      fingerprint,
       missing: r.missing || [],
       problems: r.problems || [],
       risks: r.risks || [],

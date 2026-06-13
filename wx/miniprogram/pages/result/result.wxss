@@ -15,6 +15,27 @@
 .verdict-sub { margin-top: 14rpx; font-size: 26rpx; color: #555; }
 .verdict-sub .score { font-weight: 600; margin-right: 16rpx; }
 
+.fingerprint {
+  margin: 0 24rpx 24rpx;
+  padding: 22rpx 28rpx;
+  border-radius: 16rpx;
+  background: #eef4ff;
+  border: 1rpx solid #d6e2ff;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.fingerprint .fp-tag {
+  font-size: 22rpx;
+  color: #fff;
+  background: #3b6cff;
+  border-radius: 8rpx;
+  padding: 4rpx 14rpx;
+  margin-right: 16rpx;
+}
+.fingerprint .fp-name { font-size: 30rpx; font-weight: 700; color: #14213d; }
+.fingerprint .fp-meta { width: 100%; margin-top: 10rpx; font-size: 24rpx; color: var(--muted); }
+
 .card-h { font-size: 30rpx; font-weight: 700; margin-bottom: 18rpx; }
 .card-h .cat { font-size: 24rpx; font-weight: 400; margin-left: 12rpx; }
 .fail-h { color: var(--fail); }
