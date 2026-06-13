@@ -30,10 +30,8 @@ function renderMd(text) {
   }).join("\n");
 }
 
-function loadDoc(card) {
-  const url = card.getAttribute("data-doc");
-  const fmt = card.getAttribute("data-fmt");
-  const target = card.querySelector("[data-target]");
+function loadInto(details, url, fmt) {
+  const target = details.querySelector("[data-target]");
   if (!target || target.dataset.loaded) return;
   target.dataset.loaded = "1";
   target.innerHTML = '<span class="loading">加载中…</span>';
@@ -48,10 +46,14 @@ function loadDoc(card) {
   });
 }
 
-document.querySelectorAll(".doc-card").forEach((card) => {
-  const details = card.querySelector("details.fulltext");
-  if (!details) return;
+// 每个可折叠块展开时懒加载其文档。文档来源优先取 details 自身的 data-doc，
+// 否则回退到所属卡片的 data-doc（主文件全文）。
+document.querySelectorAll("details.fulltext").forEach((details) => {
   details.addEventListener("toggle", () => {
-    if (details.open) loadDoc(card);
+    if (!details.open) return;
+    const card = details.closest(".doc-card");
+    const url = details.getAttribute("data-doc") || (card && card.getAttribute("data-doc"));
+    const fmt = details.getAttribute("data-fmt") || (card && card.getAttribute("data-fmt")) || "txt";
+    if (url) loadInto(details, url, fmt);
   });
 });
