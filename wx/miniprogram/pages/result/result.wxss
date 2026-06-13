@@ -1,5 +1,9 @@
 .page { padding-bottom: 48rpx; }
 
+/* 原图预览 */
+.preview-wrap { margin: 24rpx 24rpx 0; }
+.preview-img { width: 100%; border-radius: 16rpx; display: block; background: #f0f1f3; }
+
 .verdict { margin: 24rpx; padding: 32rpx; border-radius: 16rpx; }
 .verdict.v-ok { background: #e7f6ec; }
 .verdict.v-warn { background: #fdf6e3; }

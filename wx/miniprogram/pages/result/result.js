@@ -28,6 +28,7 @@ Page({
     score: null,
     counts: '',
     catName: '',
+    previewImage: '',
     fields: [],
     nutrition: [],
     rows: [],
@@ -43,6 +44,8 @@ Page({
       api.fetchHistoryDetail(options.hid).then((d) => {
         wx.hideLoading();
         if (d && d.result) {
+          const img = (d.images && d.images[0]) || '';
+          if (img) this.setData({ previewImage: img });
           this._render(d.result);
         } else {
           wx.showToast({ title: '历史不存在', icon: 'none' });
@@ -61,6 +64,8 @@ Page({
       setTimeout(() => wx.navigateBack(), 1200);
       return;
     }
+    const localImg = (getApp().globalData && getApp().globalData.lastImage) || '';
+    if (localImg) this.setData({ previewImage: localImg });
     this._render(r);
   },
 
@@ -112,6 +117,12 @@ Page({
   },
 
   onBack() { wx.navigateBack(); },
+
+  onPreviewImage() {
+    if (this.data.previewImage) {
+      wx.previewImage({ urls: [this.data.previewImage], current: this.data.previewImage });
+    }
+  },
 
   onShareAppMessage() {
     return { title: '我用食品标签合规检查查了一份标签', path: '/pages/index/index' };

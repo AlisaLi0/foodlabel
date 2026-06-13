@@ -1,4 +1,9 @@
 <view class="page" wx:if="{{verdict}}">
+  <!-- 原图预览（点击全屏查看）-->
+  <view wx:if="{{previewImage}}" class="preview-wrap">
+    <image class="preview-img" src="{{previewImage}}" mode="widthFix" bindtap="onPreviewImage" />
+  </view>
+
   <!-- 结论 -->
   <view class="verdict v-{{verdict.cls}}">
     <view class="verdict-main">{{verdict.text}}</view>

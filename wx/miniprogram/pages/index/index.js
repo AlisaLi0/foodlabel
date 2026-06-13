@@ -146,6 +146,7 @@ Page({
       if (r.done && r.result) {
         // 把结果暂存全局，结果页读取，避免超长 URL
         getApp().globalData.lastResult = r.result;
+        getApp().globalData.lastImage = this.data.tempFilePath; // 本次上传的原图，结果页顶部展示
         this.setData({ submitting: false, statusText: '' });
         this._recompute();
         this._refreshMe();
