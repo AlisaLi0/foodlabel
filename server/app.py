@@ -32,6 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import UploadFile
 
 from . import core, llm, wxauth
+from . import seccheck
 from .standards import CHECKLIST, STANDARDS
 
 HOST = os.getenv("FOODLABEL_HOST", "127.0.0.1")
@@ -339,9 +340,15 @@ async def wx_check(request: Request) -> JSONResponse:
 
     items = await _read_uploads(request)
     try:
-        data_urls = core.prepare_items(items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES)
+        data_urls, doc_text = core.prepare_inputs(items, max_images=MAX_IMAGES, max_bytes=MAX_IMAGE_BYTES)
     except core.InputError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
+    # 内容安全：用户直传的文本（PDF/Word/TXT 提取）先过微信内容安全检测，违规则拒收（不扣费）。
+    if doc_text:
+        allowed, _label = await seccheck.check_text(doc_text, openid)
+        if not allowed:
+            return JSONResponse({"error": "上传内容包含违规信息，已拒绝。"}, status_code=400)
 
     balance = wxauth.deduct(openid, wxauth.COST_PER_CHECK, "check")
     if balance is None:
@@ -356,7 +363,7 @@ async def wx_check(request: Request) -> JSONResponse:
         "created": time.time(), "updated": time.time(),
         "cond": asyncio.Condition(),
     }
-    asyncio.create_task(_run_job(job_id, data_urls))
+    asyncio.create_task(_run_job(job_id, data_urls, doc_text))
     return JSONResponse({"job_id": job_id, "credits": balance})
 
 
