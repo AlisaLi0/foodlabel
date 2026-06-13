@@ -12,9 +12,7 @@
     /* 文档站布局：左侧导航 + 右侧单篇内容 */
     .docs-layout { max-width: 1160px; margin: 0 auto; display: flex; gap: 24px; padding: 22px 16px 56px; align-items: flex-start; box-sizing: border-box; }
     .docs-nav { width: 248px; flex: none; position: sticky; top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow-sm); max-height: calc(100vh - 32px); overflow: auto; }
-    .nav-back { display: inline-block; margin: 4px 6px 12px; color: var(--brand-d); text-decoration: none; font-size: 13.5px; }
-    .nav-back:hover { text-decoration: underline; }
-    .nav-group-t { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .4px; margin: 14px 8px 6px; }
+    .nav-group-t { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .4px; margin: 6px 8px 6px; }
     .nav-item { display: block; padding: 9px 12px; border-radius: 9px; font-size: 14px; color: var(--ink); text-decoration: none; line-height: 1.4; transition: background .14s, color .14s; }
     .nav-item:hover { background: #eef3fb; }
     .nav-item.active { background: var(--brand); color: #fff; font-weight: 600; }
@@ -40,14 +38,22 @@
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">法规与标准原文</div>
-    <div class="sub">食品标签合规检查 · 依据文件全文与官方来源</div>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href=".">
+        <span class="nav-logo" aria-hidden="true">标</span>
+        <span class="nav-name">食品标签合规检查</span>
+      </a>
+      <nav class="nav-links">
+        <a href="standards.html" aria-current="page">法规原文</a>
+        <a href="terms.html">服务条款</a>
+        <a href="privacy.html">隐私条款</a>
+      </nav>
+    </div>
   </header>
 
   <div class="docs-layout">
     <aside class="docs-nav">
-      <a class="nav-back" href="index.html">← 返回检查工具</a>
       <nav id="docsNav"></nav>
     </aside>
     <main class="docs-content" id="docsContent">

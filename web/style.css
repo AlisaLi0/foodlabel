@@ -68,6 +68,7 @@ main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
   padding: 7px 13px; border-radius: 8px; transition: background .15s, color .15s; white-space: nowrap;
 }
 .nav-links a:hover { background: #eef3fb; color: var(--brand-d); }
+.nav-links a[aria-current="page"] { background: var(--brand); color: #fff; }
 
 /* ── Hero ── */
 .hero {
