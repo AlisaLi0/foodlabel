@@ -1,33 +1,18 @@
 <view class="page">
-  <view class="intro muted">本工具合规判定所依据的现行国家标准与部门规章，附官方发布来源。三份文件均自 2027-03-16 起施行。点按链接可复制到剪贴板，在浏览器打开查看官方原文。</view>
+  <view class="intro muted">本工具合规判定所依据的现行国家标准与部门规章，均自 2027-03-16 起施行。点「查看 PDF 原文」可在线阅读官方 PDF；点「网页版」复制本工具网页链接，在浏览器打开。</view>
 
   <view wx:for="{{docs}}" wx:key="id" class="card">
     <view class="d-title">{{item.title}}</view>
     <view class="d-sub muted">{{item.sub}}</view>
 
-    <view class="links">
-      <view wx:for="{{item.links}}" wx:for-item="lk" wx:key="url" class="link" data-url="{{lk.url}}" bindtap="onCopyLink">
-        <text class="link-t">{{lk.label}}</text>
-        <text class="link-copy">复制链接</text>
+    <view class="actions">
+      <view class="act-btn primary {{item.loading ? 'disabled' : ''}}" data-id="{{item.id}}" bindtap="onOpenPdf">
+        {{item.loading ? '加载中…' : '查看 PDF 原文'}}
       </view>
-    </view>
-
-    <view class="toggle" data-id="{{item.id}}" bindtap="onToggle">
-      {{item.open ? '▾ 收起全文' : '▸ 展开全文'}}
-    </view>
-
-    <view wx:if="{{item.open}}" class="fulltext">
-      <view wx:if="{{item.loading}}" class="loading muted">加载中…</view>
-      <view wx:elif="{{item.error}}" class="loading err">{{item.error}}</view>
-      <block wx:else>
-        <block wx:for="{{item.lines}}" wx:for-item="ln" wx:key="i">
-          <view wx:if="{{ln.type === 'h'}}" class="doc-h">{{ln.text}}</view>
-          <view wx:elif="{{ln.type === 'q'}}" class="doc-q">{{ln.text}}</view>
-          <view wx:else class="doc-p">{{ln.text}}</view>
-        </block>
-      </block>
+      <view class="act-btn" data-url="{{item.webUrl}}" bindtap="onCopyWeb">网页版（复制链接）</view>
     </view>
   </view>
 
   <view class="disclaimer muted">以上原文供合规检查参考，正式文本与最终解释以官方发布为准。</view>
 </view>
+
