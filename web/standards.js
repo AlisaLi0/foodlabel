@@ -212,7 +212,9 @@ function buildNav() {
       html += `<div class="nav-group-t">${esc(d.group)}</div>`;
       lastGroup = d.group;
     }
-    html += `<a class="nav-item" data-id="${d.id}" href="#${d.id}">${esc(d.nav)}</a>`;
+    // 注意：页面设置了 <base href="/foodlabel/">，纯 "#id" 锚点会被解析到首页，
+    // 必须带上 standards.html 才能停在本页（仅改变 hash → 触发 hashchange）。
+    html += `<a class="nav-item" data-id="${d.id}" href="standards.html#${d.id}">${esc(d.nav)}</a>`;
   });
   nav.innerHTML = html;
 }
