@@ -19,7 +19,18 @@
     <a class="topnav" href="standards.html">法规原文 ›</a>
   </header>
 
-  <main>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <span class="sidebar-title">识别历史</span>
+        <button id="historyClear" class="hclear" title="清空">清空</button>
+      </div>
+      <p class="history-tip">仅保存在本浏览器，不上传服务器。</p>
+      <ul id="historyList" class="history-list"></ul>
+      <p id="historyEmpty" class="history-empty muted">暂无历史。检查后会出现在这里。</p>
+    </aside>
+
+    <main class="content">
     <section class="uploader" id="drop">
       <p class="lead">上传预包装食品的<strong>标签照片</strong>（最多 4 张，自动识图 OCR），
         或直接上传 <strong>PDF / Word / TXT</strong> 文本（已是文字则<strong>跳过识图</strong>、直接比对），
@@ -101,16 +112,8 @@
       <p class="disclaimer">本结果由多模型 OCR 识图、识读后对照国家标准自动生成，仅供参考，
         不构成官方监管结论或法律意见。最终以监管部门与标准原文为准。相关标准 2027-03-16 正式实施。</p>
     </section>
-
-    <section id="history" class="history-box" hidden>
-      <div class="history-head">
-        <h2>识别历史</h2>
-        <button id="historyClear" class="btn ghost">清空</button>
-      </div>
-      <p class="history-tip">历史仅保存在你当前浏览器本地，不会上传服务器。</p>
-      <ul id="historyList" class="history-list"></ul>
-    </section>
-  </main>
+    </main>
+  </div>
 
   <script src="app.js"></script>
 </body>

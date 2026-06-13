@@ -619,12 +619,13 @@ function fmtTime(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function renderHistory() {
-  const box = $("history");
   const ul = $("historyList");
-  if (!box || !ul) return;
+  if (!ul) return;
   const arr = loadHistory();
-  if (!arr.length) { box.hidden = true; return; }
-  box.hidden = false;
+  const empty = $("historyEmpty");
+  const clearBtn = $("historyClear");
+  if (empty) empty.hidden = arr.length > 0;
+  if (clearBtn) clearBtn.hidden = arr.length === 0;
   ul.innerHTML = arr.map((e) => {
     const vcls = "v-" + (e.verdict || "issues");
     const vlabel = VERDICT_LABEL[e.verdict] || "已检查";
