@@ -207,6 +207,8 @@ runBtn.addEventListener("click", async () => {
     if (f.kind === "doc") fd.append("docs", f.file, f.file.name);
     else fd.append("images", f.file, f.file.name);
   });
+  // 生成本次上传项的轻量缩略图（图片压成小 dataURL，文档记文件名），随 job 持久化供刷新恢复。
+  const thumbs = await buildThumbs(files);
 
   try {
     // 先启动后台任务，拿到 job_id（处理脱离本请求，切页/刷新都不中断）。
@@ -218,7 +220,7 @@ runBtn.addEventListener("click", async () => {
     }
     const { job_id } = await resp.json();
     if (!job_id) throw new Error("未能创建检查任务");
-    saveJob(job_id);
+    saveJob(job_id, thumbs);
     // 拉取事件流（可重连续接）；从头回放。
     await streamJob(job_id, 0);
   } catch (err) {
@@ -229,6 +231,39 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
+// 为持久化生成轻量缩略图：图片缩到 ≤160px 的 JPEG dataURL（省 localStorage），文档只记文件名。
+async function buildThumbs(list) {
+  const out = [];
+  for (const f of list) {
+    if (f.kind === "doc") {
+      out.push({ kind: "doc", name: f.file.name });
+    } else {
+      try {
+        out.push({ kind: "image", url: await shrinkToDataURL(f.url, 160) });
+      } catch (e) {
+        // 压缩失败就跳过该图缩略（不影响检查恢复）
+      }
+    }
+  }
+  return out;
+}
+function shrinkToDataURL(srcUrl, maxEdge) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      try { resolve(cv.toDataURL("image/jpeg", 0.7)); } catch (e) { reject(e); }
+    };
+    img.onerror = reject;
+    img.src = srcUrl;
+  });
+}
+
 // ── 后台任务：持久化 job_id，切页/刷新/断线都能续接，不中断处理 ──
 const JOB_KEY = "foodlabel_job_v1";
 // 任务最长跟踪时长（毫秒）；超过则视为过期，刷新后不再尝试恢复。
@@ -236,8 +271,10 @@ const JOB_MAX_AGE = 30 * 60 * 1000;
 // 流令牌：每次新检查/恢复/重置都自增，使旧的拉流循环自动失效（避免重置后仍在更新 UI）。
 let streamToken = 0;
 
-function saveJob(id) {
-  try { localStorage.setItem(JOB_KEY, JSON.stringify({ id, ts: Date.now() })); } catch (e) {}
+// 保存任务 id + 本次上传项的缩略图（图片存压缩 dataURL，文档存文件名），
+// 以便刷新后恢复“已上传的图片”预览，不只是检查进度。
+function saveJob(id, thumbs) {
+  try { localStorage.setItem(JOB_KEY, JSON.stringify({ id, ts: Date.now(), thumbs: thumbs || [] })); } catch (e) {}
 }
 function loadJob() {
   try {
@@ -308,6 +345,10 @@ function resumeJobIfAny() {
   if (!j) return;
   resetSteps();
   clearReport();
+  // 恢复“已上传的图片/文档”缩略图，让刷新后仍能看到自己传的内容。
+  if (Array.isArray(j.thumbs) && j.thumbs.length) {
+    renderRestoredThumbs(j.thumbs);
+  }
   statusEl.hidden = false;
   statusEl.className = "status";
   statusEl.textContent = "正在恢复上次的检查进度…";
@@ -315,6 +356,24 @@ function resumeJobIfAny() {
   streamJob(j.id, 0);
 }
 resumeJobIfAny();
+
+// 刷新恢复时重建缩略图展示（只用于展示，原始文件已随请求上传、任务在服务端跑，无需重传）。
+function renderRestoredThumbs(list) {
+  const box = $("thumbs");
+  if (!box) return;
+  box.innerHTML = "";
+  list.forEach((t) => {
+    const d = document.createElement("div");
+    if (t.kind === "doc") {
+      d.className = "thumb doc";
+      d.innerHTML = `<div class="docicon">页</div><div class="docname">${esc(t.name || "文档")}</div>`;
+    } else {
+      d.className = "thumb";
+      d.innerHTML = `<img src="${t.url}" alt="">`;
+    }
+    box.appendChild(d);
+  });
+}
 
 // 读取 SSE 流，逐行解析 `data: {...}` 事件
 async function consumeSSE(stream, onEvent) {

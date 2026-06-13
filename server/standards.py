@@ -11,7 +11,7 @@
 """
 from __future__ import annotations
 
-STANDARDS = "GB 7718-2025（预包装食品标签通则）、GB 28050-2025（预包装食品营养标签通则），均于 2027-03-16 实施"
+STANDARDS = "GB 7718-2025（预包装食品标签通则）、GB 28050-2025（预包装食品营养标签通则），同步参考《食品标识监督管理办法》（总局令第100号），均于 2027-03-16 实施"
 
 # 强制性检查清单。每项：id / category(标准) / item(检查项) / requirement(要求摘要) / basis(条款)
 # 模型对每一项返回 status ∈ {pass, fail, warn, na, unknown} 与说明。
