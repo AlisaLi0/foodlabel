@@ -24,10 +24,10 @@ const reportEl = $("report");
 let files = []; // {file, url}
 
 const STATUS_LABEL = {
-  pass: "符合", miss: "缺失", fail: "不符合", warn: "需复核", na: "不适用", unknown: "看不清",
+  pass: "未见问题", miss: "缺失", fail: "不符合", warn: "需复核", na: "不适用", unknown: "看不清",
 };
 const VERDICT_LABEL = {
-  compliant: "标签基本符合国家标准要求",
+  compliant: "未检测出明显问题",
   issues: "标签存在需复核或不规范之处",
   non_compliant: "标签存在不符合国家标准的问题",
   not_a_label: "未能识别为食品标签",
@@ -567,7 +567,7 @@ function renderVerdict(data) {
   v.className = "verdict v-" + verdict;
   let score = "";
   if (typeof summary.score === "number") score = `<span class="score">合规评分 ${summary.score}/100</span>`;
-  const counts = `符合 ${summary.pass || 0} · 缺失 ${summary.miss || 0} · 不符合 ${summary.fail || 0} · 需复核 ${summary.warn || 0}`;
+  const counts = `未见问题 ${summary.pass || 0} · 缺失 ${summary.miss || 0} · 不符合 ${summary.fail || 0} · 需复核 ${summary.warn || 0}`;
   v.innerHTML = `${score}${esc(VERDICT_LABEL[verdict] || verdict)}<div class="sub" style="font-weight:400;font-size:13px;margin-top:4px;">${counts}</div>`;
 }
 

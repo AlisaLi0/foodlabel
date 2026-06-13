@@ -1,10 +1,10 @@
 const VERDICT = {
-  compliant: { text: '标签基本符合国家标准要求', cls: 'ok' },
+  compliant: { text: '未检测出明显问题', cls: 'ok' },
   issues: { text: '标签存在需复核或不规范之处', cls: 'warn' },
   non_compliant: { text: '标签存在不符合国家标准的问题', cls: 'fail' },
   not_a_label: { text: '未能识别为食品标签', cls: 'warn' },
 };
-const STATUS_LABEL = { pass: '符合', miss: '缺失', fail: '不符合', warn: '需复核', na: '不适用', unknown: '看不清', pending: '待评价' };
+const STATUS_LABEL = { pass: '未见问题', miss: '缺失', fail: '不符合', warn: '需复核', na: '不适用', unknown: '看不清', pending: '待评价' };
 const FIELD_LABEL = {
   food_name: '食品名称', ingredients: '配料表', additives: '食品添加剂',
   net_content: '净含量', barcode: '条码', spec: '规格', producer: '生产者/经营者', address: '地址',
@@ -73,7 +73,7 @@ Page({
   _render(r) {
     const sm = r.summary || {};
     const v = VERDICT[sm.verdict] || VERDICT.issues;
-    const counts = `符合 ${sm.pass || 0} · 缺失 ${sm.miss || 0} · 不符合 ${sm.fail || 0} · 需复核 ${sm.warn || 0}`;
+    const counts = `未见问题 ${sm.pass || 0} · 缺失 ${sm.miss || 0} · 不符合 ${sm.fail || 0} · 需复核 ${sm.warn || 0}`;
 
     const ex = r.extracted || {};
     const fields = FIELD_ORDER

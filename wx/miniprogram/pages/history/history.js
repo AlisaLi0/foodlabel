@@ -1,7 +1,7 @@
 const api = require('../../utils/api.js');
 
 const VERDICT_TEXT = {
-  compliant: '基本符合',
+  compliant: '未见问题',
   issues: '需复核',
   non_compliant: '不符合',
   not_a_label: '非标签',
