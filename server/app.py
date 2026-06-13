@@ -331,11 +331,23 @@ async def wx_sec_callback(request: Request):
         return PlainTextResponse("invalid signature", status_code=403)
     if request.method == "GET":
         return PlainTextResponse(q.get("echostr", ""))
-    # POST：明文模式下为 JSON 事件体。
+    # POST：明文模式事件体。优先按 JSON 解析；若是 XML（微信部分事件强制 XML）则降级解析。
+    raw = await request.body()
+    data: dict = {}
     try:
-        data = await request.json()
-    except Exception:  # noqa: BLE001
-        data = {}
+        import json as _json
+        data = _json.loads(raw.decode("utf-8"))
+    except Exception:  # noqa: BLE001 — 非 JSON，尝试 XML
+        try:
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(raw.decode("utf-8"))
+            data = {child.tag: (child.text or "") for child in root}
+            # XML 嵌套的 result 节点（如 <result><suggest>risky</suggest></result>）拍平到顶层。
+            res = root.find("result")
+            if res is not None:
+                data["result"] = {c.tag: (c.text or "") for c in res}
+        except Exception:  # noqa: BLE001 — 解析失败按空事件处理，仍回 success 避免微信重试风暴
+            data = {}
     seccheck.handle_callback(data)
     return PlainTextResponse("success")
 
