@@ -8,12 +8,12 @@ const DOCS = [
     group: "GB 7718-2025 预包装食品标签通则",
     nav: "标准正文",
     title: "GB 7718-2025 食品安全国家标准 预包装食品标签通则",
-    sub: "2025-03-16 发布 · 2027-03-16 实施 · 国家卫生健康委员会、国家市场监督管理总局 发布（代替 GB 7718-2011）",
+    sub: "国家卫生健康委、国家市场监督管理总局 · 2025-03-16 发布 · 2027-03-16 实施（代替 GB 7718-2011）",
     links: [
-      { label: "官方发布公告：卫健委 2025年第2号", url: "https://www.nhc.gov.cn/sps/c100088/202503/e8a432507f7d4f08a877e76a9b0578ce.shtml", src: true },
+      { label: "官方问答：GB 7718-2025（卫健委）", url: "https://www.nhc.gov.cn/sps/c100087/202509/bc824a504ec34c27883da73f14c20d44.shtml", src: true },
       { label: "下载本页文本", url: "docs/gb7718-2025.txt" },
     ],
-    note: "国家卫生健康委、国家市场监督管理总局 2025-03-27 以「2025年第2号公告」正式发布 GB 7718-2025。",
+    note: "GB 7718-2025 于 2025-03-27 由国家卫生健康委、国家市场监督管理总局「2025年第2号公告」与其它 49 项标准一同发布。",
     file: "docs/gb7718-2025.txt",
     fmt: "txt",
   },
@@ -36,12 +36,12 @@ const DOCS = [
     group: "GB 28050-2025 预包装食品营养标签通则",
     nav: "标准正文",
     title: "GB 28050-2025 食品安全国家标准 预包装食品营养标签通则",
-    sub: "2025-03-16 发布 · 2027-03-16 实施 · 国家卫生健康委员会、国家市场监督管理总局 发布（代替 GB 28050-2011）",
+    sub: "国家卫生健康委、国家市场监督管理总局 · 2025-03-16 发布 · 2027-03-16 实施（代替 GB 28050-2011）",
     links: [
-      { label: "官方发布公告：卫健委 2025年第2号", url: "https://www.nhc.gov.cn/sps/c100088/202503/e8a432507f7d4f08a877e76a9b0578ce.shtml", src: true },
+      { label: "官方问答：GB 28050-2025（卫健委）", url: "https://www.nhc.gov.cn/sps/c100087/202509/470fa4ff5de14dd38619223cce9da4e7.shtml", src: true },
       { label: "下载本页文本", url: "docs/gb28050-2025.txt" },
     ],
-    note: "国家卫生健康委、国家市场监督管理总局 2025-03-27 以「2025年第2号公告」正式发布 GB 28050-2025。",
+    note: "GB 28050-2025 于 2025-03-27 由国家卫生健康委、国家市场监督管理总局「2025年第2号公告」与其它 49 项标准一同发布。",
     file: "docs/gb28050-2025.txt",
     fmt: "txt",
   },
@@ -239,7 +239,7 @@ function loadText(doc, target) {
   });
 }
 
-// 渲染右侧单篇内容
+// 渲染右侧单篇内容（仿官方公文版式：面包屑 + 居中标题 + 居中来源行 + 正文）
 function renderDoc(doc) {
   const links = doc.links.map((l) =>
     `<a class="${l.src ? "src" : ""}" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`
@@ -247,8 +247,9 @@ function renderDoc(doc) {
   const note = doc.note ? `<p class="src-note">${esc(doc.note)}</p>` : "";
   const content = document.getElementById("docsContent");
   content.innerHTML =
+    `<div class="doc-crumb">法规原文<span class="sep">›</span>${esc(doc.group)}</div>` +
     `<h1 class="doc-title">${esc(doc.title)}</h1>` +
-    `<p class="doc-sub">${esc(doc.sub)}</p>` +
+    `<p class="doc-meta">${esc(doc.sub)}</p>` +
     `<div class="doc-links">${links}</div>` +
     note +
     `<div class="doctext" id="docText">—</div>`;

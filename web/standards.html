@@ -16,17 +16,19 @@
     .nav-item { display: block; padding: 9px 12px; border-radius: 9px; font-size: 14px; color: var(--ink); text-decoration: none; line-height: 1.4; transition: background .14s, color .14s; }
     .nav-item:hover { background: #eef3fb; }
     .nav-item.active { background: var(--brand); color: #fff; font-weight: 600; }
-    .docs-content { flex: 1; min-width: 0; background: var(--card); border-radius: var(--radius); padding: 24px 26px; box-shadow: var(--shadow); }
-    .doc-title { margin: 0 0 6px; font-size: 20px; }
-    .doc-sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; line-height: 1.6; }
-    .doc-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-    .doc-links a { font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); color: var(--brand-d); text-decoration: none; background: #f5f8fd; }
+    .docs-content { flex: 1; min-width: 0; background: var(--card); border-radius: var(--radius); padding: 30px 40px 36px; box-shadow: var(--shadow); }
+    .doc-crumb { font-size: 12.5px; color: var(--muted); margin-bottom: 18px; }
+    .doc-crumb .sep { margin: 0 7px; color: #c2c8d0; }
+    .doc-title { margin: 0 auto 10px; font-size: 23px; font-weight: 700; text-align: center; color: #15539e; line-height: 1.5; max-width: 40em; }
+    .doc-meta { color: var(--muted); font-size: 13px; margin: 0 0 16px; text-align: center; padding-bottom: 16px; border-bottom: 1px solid var(--line); line-height: 1.7; }
+    .doc-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; justify-content: center; }
+    .doc-links a { font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); color: var(--brand-d); text-decoration: none; background: #f5f8fd; }
     .doc-links a:hover { background: #e9f1fc; }
     .doc-links a.src { border-color: var(--brand); color: #fff; background: var(--brand); }
     .doc-links a.src:hover { background: var(--brand-d); }
-    .src-note { color: var(--muted); font-size: 12px; margin: 6px 0 0; line-height: 1.6; }
+    .src-note { color: var(--muted); font-size: 12px; margin: 6px auto 0; line-height: 1.7; text-align: center; max-width: 52em; }
     /* 文档正文：仿公文排版（宋体、段落首行缩进、居中封面、章节标题） */
-    .doctext { font-family: "Songti SC", "SimSun", "STSong", Georgia, "Times New Roman", serif; font-size: 15.5px; line-height: 2.0; color: #1b2430; margin-top: 18px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .doctext { font-family: "Songti SC", "SimSun", "STSong", Georgia, "Times New Roman", serif; font-size: 15.5px; line-height: 2.0; color: #1b2430; margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line); }
     .doctext .doc-cover { text-align: center; margin: 4px 0 28px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
     .doctext .cv-line { font-size: 15px; line-height: 1.9; }
     .doctext .cv-num { font-size: 17px; letter-spacing: 1px; margin: 6px 0; }
