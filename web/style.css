@@ -5,9 +5,9 @@
   --ink: #1b2430;
   --muted: #667085;
   --line: #e4e8ef;
-  --brand: #1565c4;
-  --brand-d: #0d4a9c;
-  --brand-l: #2b82ea;
+  --brand: #2079db;
+  --brand-d: #1562bd;
+  --brand-l: #4a97f0;
   --pass: #1a7f37;
   --fail: #c2362f;
   --warn: #b7791f;
@@ -73,8 +73,8 @@ main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
 .hero {
   color: #fff;
   background:
-    radial-gradient(900px 360px at 50% -140px, rgba(56,132,240,.55), transparent 70%),
-    linear-gradient(160deg, #1a5cba 0%, #0d3f93 100%);
+    radial-gradient(900px 360px at 50% -140px, rgba(96,160,245,.55), transparent 70%),
+    linear-gradient(160deg, #3284e6 0%, #1c64c4 100%);
 }
 .hero-inner { max-width: 860px; margin: 0 auto; padding: 52px 22px 72px; text-align: center; }
 .hero-title { margin: 0 0 14px; font-size: 33px; font-weight: 800; letter-spacing: .5px; line-height: 1.25; }
@@ -410,7 +410,7 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 /* 全站页脚 */
 .site-footer {
   width: 100%;
-  background: #0f1e35;
+  background: #16294a;
   padding: 30px 16px 34px;
   text-align: center; color: rgba(255,255,255,.66); font-size: 13px;
 }
