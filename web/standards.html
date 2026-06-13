@@ -9,26 +9,34 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="style.css" />
   <style>
-    .doc-card { background: var(--card); border-radius: 12px; padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
-    .doc-card h2 { margin: 0 0 6px; font-size: 17px; }
-    .doc-sub { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
-    .doc-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+    /* 文档站布局：左侧导航 + 右侧单篇内容 */
+    .docs-layout { max-width: 1160px; margin: 0 auto; display: flex; gap: 24px; padding: 22px 16px 56px; align-items: flex-start; box-sizing: border-box; }
+    .docs-nav { width: 248px; flex: none; position: sticky; top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; box-shadow: var(--shadow-sm); max-height: calc(100vh - 32px); overflow: auto; }
+    .nav-back { display: inline-block; margin: 4px 6px 12px; color: var(--brand-d); text-decoration: none; font-size: 13.5px; }
+    .nav-back:hover { text-decoration: underline; }
+    .nav-group-t { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .4px; margin: 14px 8px 6px; }
+    .nav-item { display: block; padding: 9px 12px; border-radius: 9px; font-size: 14px; color: var(--ink); text-decoration: none; line-height: 1.4; transition: background .14s, color .14s; }
+    .nav-item:hover { background: #eef3fb; }
+    .nav-item.active { background: var(--brand); color: #fff; font-weight: 600; }
+    .docs-content { flex: 1; min-width: 0; background: var(--card); border-radius: var(--radius); padding: 24px 26px; box-shadow: var(--shadow); }
+    .doc-title { margin: 0 0 6px; font-size: 20px; }
+    .doc-sub { color: var(--muted); font-size: 13px; margin: 0 0 16px; line-height: 1.6; }
+    .doc-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
     .doc-links a { font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); color: var(--brand-d); text-decoration: none; background: #f5f8fd; }
     .doc-links a:hover { background: #e9f1fc; }
     .doc-links a.src { border-color: var(--brand); color: #fff; background: var(--brand); }
     .doc-links a.src:hover { background: var(--brand-d); }
-    .src-note { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
-    details.fulltext { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
-    details.fulltext > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--brand-d); list-style: none; }
-    details.fulltext > summary::-webkit-details-marker { display: none; }
-    details.fulltext > summary::before { content: "▸ "; }
-    details.fulltext[open] > summary::before { content: "▾ "; }
-    .doctext { white-space: pre-wrap; word-break: break-word; font-size: 13.5px; line-height: 1.85; margin-top: 12px; max-height: 60vh; overflow: auto; padding: 4px 2px; }
-    .doctext h3 { font-size: 15px; margin: 18px 0 8px; color: var(--brand-d); border-left: 3px solid var(--brand); padding-left: 8px; }
+    .src-note { color: var(--muted); font-size: 12px; margin: 6px 0 0; line-height: 1.6; }
+    .doctext { white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.9; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+    .doctext h3 { font-size: 15px; margin: 20px 0 8px; color: var(--brand-d); border-left: 3px solid var(--brand); padding-left: 8px; }
     .doctext .art { font-weight: 600; }
     .doctext .q { color: var(--muted); font-size: 13px; }
-    .loading { color: var(--muted); font-size: 13px; padding: 10px 0; }
-    .nav-back { display: inline-block; margin-bottom: 4px; color: var(--brand-d); text-decoration: none; font-size: 14px; }
+    .loading { color: var(--muted); font-size: 13px; padding: 12px 0; }
+    .loading.err { color: var(--fail); }
+    @media (max-width: 760px) {
+      .docs-layout { flex-direction: column; }
+      .docs-nav { width: 100%; position: static; max-height: none; }
+    }
   </style>
 </head>
 <body>
@@ -37,62 +45,15 @@
     <div class="sub">食品标签合规检查 · 依据文件全文与官方来源</div>
   </header>
 
-  <main>
-    <p style="margin:0 0 14px;"><a class="nav-back" href="index.html">← 返回检查工具</a></p>
-
-    <p class="hint" style="margin-bottom:16px;">
-      本页汇总本工具合规判定所依据的现行国家标准与部门规章原文，并附官方发布来源。
-      三份文件均自 <strong>2027-03-16</strong> 起施行。强制性食品安全国家标准依《标准化法》免费向社会公开，正式文本以官方发布为准。
-    </p>
-
-    <section class="doc-card" data-doc="docs/gb7718-2025.txt" data-fmt="txt">
-      <h2>GB 7718-2025 食品安全国家标准 预包装食品标签通则</h2>
-      <p class="doc-sub">2025-03-16 发布 · 2027-03-16 实施 · 国家卫生健康委员会、国家市场监督管理总局 发布（代替 GB 7718-2011）</p>
-      <div class="doc-links">
-        <a class="src" href="https://www.nhc.gov.cn/sps/c100088/202503/e8a432507f7d4f08a877e76a9b0578ce.shtml" target="_blank" rel="noopener">官方发布公告：卫健委 2025年第2号</a>
-        <a href="https://sppt.cfsa.net.cn:8086/" target="_blank" rel="noopener">标准全文检索平台</a>
-        <a href="docs/gb7718-2025.txt" target="_blank" rel="noopener">下载本页文本</a>
-      </div>
-      <p class="src-note">国家卫生健康委、国家市场监督管理总局 2025-03-27 以「2025年第2号公告」正式发布 <strong>GB 7718-2025</strong>；标准全文可在「食品安全国家标准数据检索平台」按标准号检索。</p>
-      <div class="doc-links" style="margin-top:8px;">
-        <a href="https://www.nhc.gov.cn/sps/c100087/202509/bc824a504ec34c27883da73f14c20d44.shtml" target="_blank" rel="noopener">官方问答：GB 7718-2025（2025-09-25）</a>
-        <a href="docs/gb7718-2025-interpret.txt" target="_blank" rel="noopener">下载解读文本</a>
-      </div>
-      <details class="fulltext"><summary>展开全文</summary><div class="doctext" data-target>—</div></details>
-      <details class="fulltext" data-doc="docs/gb7718-2025-interpret.txt" data-fmt="txt"><summary>官方解读材料（卫健委、市场监管总局 2025-03-16）</summary><div class="doctext" data-target>—</div></details>
-    </section>
-
-    <section class="doc-card" data-doc="docs/gb28050-2025.txt" data-fmt="txt">
-      <h2>GB 28050-2025 食品安全国家标准 预包装食品营养标签通则</h2>
-      <p class="doc-sub">2025-03-16 发布 · 2027-03-16 实施 · 国家卫生健康委员会、国家市场监督管理总局 发布（代替 GB 28050-2011）</p>
-      <div class="doc-links">
-        <a class="src" href="https://www.nhc.gov.cn/sps/c100088/202503/e8a432507f7d4f08a877e76a9b0578ce.shtml" target="_blank" rel="noopener">官方发布公告：卫健委 2025年第2号</a>
-        <a href="https://sppt.cfsa.net.cn:8086/" target="_blank" rel="noopener">标准全文检索平台</a>
-        <a href="docs/gb28050-2025.txt" target="_blank" rel="noopener">下载本页文本</a>
-      </div>
-      <p class="src-note">国家卫生健康委、国家市场监督管理总局 2025-03-27 以「2025年第2号公告」正式发布 <strong>GB 28050-2025</strong>；标准全文可在「食品安全国家标准数据检索平台」按标准号检索。</p>
-      <div class="doc-links" style="margin-top:8px;">
-        <a href="https://www.nhc.gov.cn/sps/c100087/202509/470fa4ff5de14dd38619223cce9da4e7.shtml" target="_blank" rel="noopener">官方问答：GB 28050-2025（2025-09-25）</a>
-        <a href="docs/gb28050-2025-qa.txt" target="_blank" rel="noopener">下载问答文本</a>
-      </div>
-      <details class="fulltext"><summary>展开全文</summary><div class="doctext" data-target>—</div></details>
-      <details class="fulltext" data-doc="docs/gb28050-2025-qa.txt" data-fmt="txt"><summary>官方问答（中国食品科学技术学会）</summary><div class="doctext" data-target>—</div></details>
-    </section>
-
-    <section class="doc-card" data-doc="docs/decree-100.md" data-fmt="md">
-      <h2>食品标识监督管理办法（国家市场监督管理总局令第 100 号）</h2>
-      <p class="doc-sub">2025-03-14 公布 · 2027-03-16 施行 · 国家市场监督管理总局（共 7 章 54 条）</p>
-      <div class="doc-links">
-        <a class="src" href="https://www.moj.gov.cn/pub/sfbgw/flfggz/flfggzbmgz/202511/t20251106_527628.html" target="_blank" rel="noopener">官方来源：司法部 部门规章库</a>
-        <a href="https://www.samr.gov.cn/" target="_blank" rel="noopener">国家市场监督管理总局</a>
-        <a href="docs/decree-100.md" target="_blank" rel="noopener">下载本页文本</a>
-      </div>
-      <p class="src-note">《食品标识监督管理办法》（国家市场监督管理总局令第100号）由司法部「国家法律法规数据库 / 部门规章」收录全文。</p>
-      <details class="fulltext"><summary>展开全文</summary><div class="doctext" data-target>—</div></details>
-    </section>
-
-    <p class="disclaimer">以上原文供合规检查参考，正式文本与最终解释以官方发布为准。本工具检查结果仅供参考，不构成官方监管结论或法律意见。</p>
-  </main>
+  <div class="docs-layout">
+    <aside class="docs-nav">
+      <a class="nav-back" href="index.html">← 返回检查工具</a>
+      <nav id="docsNav"></nav>
+    </aside>
+    <main class="docs-content" id="docsContent">
+      <p class="loading">加载中…</p>
+    </main>
+  </div>
 
   <footer class="site-footer">
     <a href="index.html">检查工具</a>
