@@ -37,6 +37,8 @@ body {
 }
 .topbar .brand { font-size: 18px; font-weight: 700; }
 .topbar .sub { font-size: 13px; opacity: .85; }
+.topbar .topnav { margin-left: auto; color: #fff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 4px 10px; border: 1px solid rgba(255,255,255,.5); border-radius: 8px; white-space: nowrap; }
+.topbar .topnav:hover { background: rgba(255,255,255,.15); }
 main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
 
 .uploader {

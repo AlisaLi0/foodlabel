@@ -4,3 +4,4 @@ venv/
 data/
 *.db
 foodlabel.env
+web/uploads/
