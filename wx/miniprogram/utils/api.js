@@ -77,6 +77,15 @@ function pollResult(jobId) {
   return request('/api/wx/result?job_id=' + encodeURIComponent(jobId), { timeout: 20000 });
 }
 
+// 识别历史
+function fetchHistory() { return request('/api/wx/history'); }
+function fetchHistoryDetail(id) {
+  return request('/api/wx/history/detail?id=' + encodeURIComponent(id));
+}
+function deleteHistory(id) {
+  return request('/api/wx/history/delete', { method: 'POST', data: { id } });
+}
+
 module.exports = {
   API_BASE,
   request,
@@ -85,4 +94,7 @@ module.exports = {
   claimShareReward,
   startCheck,
   pollResult,
+  fetchHistory,
+  fetchHistoryDetail,
+  deleteHistory,
 };

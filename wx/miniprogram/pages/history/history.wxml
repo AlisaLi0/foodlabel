@@ -1,0 +1,29 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="empty muted">加载中…</view>
+
+  <view wx:elif="{{items.length === 0}}" class="empty">
+    <view class="empty-icon">🗂️</view>
+    <view class="empty-text muted">暂无识别历史</view>
+    <view class="empty-sub muted">检查过的标签会自动保存在这里</view>
+  </view>
+
+  <view wx:else class="list">
+    <view wx:for="{{items}}" wx:key="id" class="hcard">
+      <view class="hcard-main" bindtap="onOpen" data-id="{{item.id}}">
+        <image wx:if="{{item.thumb}}" class="hthumb" src="{{item.thumb}}" mode="aspectFill" />
+        <view wx:else class="hthumb hthumb-doc">文</view>
+        <view class="hinfo">
+          <view class="hname">{{item.food_name}}</view>
+          <view class="hmeta">
+            <text class="hv v-{{item.verdict}}">{{item.verdictText}}</text>
+            <text class="hscore">{{item.score}}/100</text>
+          </view>
+          <view class="htime muted">{{item.timeText}}</view>
+        </view>
+      </view>
+      <view class="hdel" catchtap="onDelete" data-id="{{item.id}}">删除</view>
+    </view>
+  </view>
+
+  <view wx:if="{{items.length > 0}}" class="tip muted">图片与结果保存在服务器，删除后不可恢复。</view>
+</view>

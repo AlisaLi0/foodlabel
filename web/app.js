@@ -388,6 +388,7 @@ function onStepEvent(ev) {
     renderFindings("problems", data.problems);
     renderFindings("risks", data.risks);
     reportEl.hidden = false;
+    addHistory(data);
   }
 }
 
@@ -518,3 +519,93 @@ function renderFindings(kind, list) {
 fetch(api("api/health")).then((r) => r.json()).then((d) => {
   if (d.standards) $("standards").textContent = d.standards;
 }).catch(() => {});
+
+// ───────────────────────────── 识别历史（仅本地 localStorage）─────────────────────────────
+// 历史只存在用户当前浏览器，不上传服务器。每条存：时间、结论、评分、食品名、完整 result（供回看）。
+const HISTORY_KEY = "foodlabel_history_v1";
+const HISTORY_MAX = 30; // 最多保留条数，超出丢弃最旧
+
+function loadHistory() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function saveHistory(arr) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(arr.slice(0, HISTORY_MAX))); } catch (e) {}
+}
+function addHistory(result) {
+  if (!result || !result.summary) return;
+  const ex = result.extracted || {};
+  const entry = {
+    id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+    ts: Date.now(),
+    verdict: result.summary.verdict || "issues",
+    score: typeof result.summary.score === "number" ? result.summary.score : null,
+    food_name: (typeof ex.food_name === "string" ? ex.food_name : "") || "未识读到名称",
+    result,
+  };
+  const arr = loadHistory();
+  arr.unshift(entry);
+  saveHistory(arr);
+  renderHistory();
+}
+function deleteHistory(id) {
+  saveHistory(loadHistory().filter((e) => e.id !== id));
+  renderHistory();
+}
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function renderHistory() {
+  const box = $("history");
+  const ul = $("historyList");
+  if (!box || !ul) return;
+  const arr = loadHistory();
+  if (!arr.length) { box.hidden = true; return; }
+  box.hidden = false;
+  ul.innerHTML = arr.map((e) => {
+    const vcls = "v-" + (e.verdict || "issues");
+    const vlabel = VERDICT_LABEL[e.verdict] || "已检查";
+    const score = e.score !== null && e.score !== undefined ? `<span class="hscore">${e.score}/100</span>` : "";
+    return `<li class="history-item" data-id="${e.id}">
+      <div class="hi-main">
+        <div class="hi-name">${esc(e.food_name)}</div>
+        <div class="hi-meta"><span class="hv ${vcls}">${esc(vlabel)}</span>${score}<span class="htime">${fmtTime(e.ts)}</span></div>
+      </div>
+      <button class="hi-del" data-del="${e.id}" title="删除">×</button>
+    </li>`;
+  }).join("");
+}
+// 点击历史项查看；点删除按钮删除
+$("historyList").addEventListener("click", (e) => {
+  const del = e.target.getAttribute && e.target.getAttribute("data-del");
+  if (del) { deleteHistory(del); return; }
+  const li = e.target.closest && e.target.closest(".history-item");
+  if (!li) return;
+  const id = li.getAttribute("data-id");
+  const entry = loadHistory().find((x) => x.id === id);
+  if (!entry) return;
+  // 用存的 result 复用渲染函数回看报告
+  clearReport();
+  resetSteps();
+  const data = entry.result;
+  renderExtracted(data);
+  renderRules(data.rules, data.checks);
+  renderVerdict(data);
+  renderFindings("missing", data.missing);
+  renderFindings("problems", data.problems);
+  renderFindings("risks", data.risks);
+  reportEl.hidden = false;
+  reportEl.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+$("historyClear").addEventListener("click", () => {
+  if (loadHistory().length && confirm("确定清空全部识别历史？")) {
+    saveHistory([]);
+    renderHistory();
+  }
+});
+renderHistory();
+

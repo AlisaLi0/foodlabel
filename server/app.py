@@ -288,33 +288,65 @@ async def wx_health() -> dict:
     return {"ok": True, "wx_enabled": wxauth.wx_enabled()}
 
 
-async def _submit_images_seccheck(items: list, openid: str) -> None:
-    """把上传项里的图片落盘成公网 URL 并异步送检微信内容安全。fail-open，绝不抛。"""
-    if not seccheck.enabled():
-        return
+async def _persist_images(items: list) -> list[tuple[str, str]]:
+    """把上传项里的图片落盘到公网可访问目录，返回 [(url, abspath)]。文档不落盘。
+
+    复用于：① 微信内容安全 media_check_async 的 media_url；② 小程序识别历史保存原图。
+    异常不抛（落盘失败只影响附加功能，不阻断主检查流程）。
+    """
+    saved: list[tuple[str, str]] = []
     try:
         os.makedirs(UPLOAD_DIR, exist_ok=True)
-        for raw, ctype, fname in items:
-            ct = (ctype or "").lower()
-            name = (fname or "").lower()
-            is_image = ct.startswith("image/") or name.endswith(
-                (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
-            )
-            if not is_image or not raw:
-                continue
-            ext = "jpg"
-            if "png" in ct or name.endswith(".png"):
-                ext = "png"
-            elif "webp" in ct or name.endswith(".webp"):
-                ext = "webp"
-            key = f"{uuid.uuid4().hex}.{ext}"
-            path = os.path.join(UPLOAD_DIR, key)
+    except Exception:  # noqa: BLE001
+        return saved
+    for raw, ctype, fname in items:
+        ct = (ctype or "").lower()
+        name = (fname or "").lower()
+        is_image = ct.startswith("image/") or name.endswith(
+            (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+        )
+        if not is_image or not raw:
+            continue
+        ext = "jpg"
+        if "png" in ct or name.endswith(".png"):
+            ext = "png"
+        elif "webp" in ct or name.endswith(".webp"):
+            ext = "webp"
+        key = f"{uuid.uuid4().hex}.{ext}"
+        path = os.path.join(UPLOAD_DIR, key)
+        try:
             with open(path, "wb") as f:
                 f.write(raw)
-            media_url = f"{PUBLIC_BASE}/uploads/{key}"
-            await seccheck.submit_image(media_url, openid)
-    except Exception:  # noqa: BLE001 — 内容安全是附加防线，落盘/送检异常不阻断主流程
-        pass
+        except Exception:  # noqa: BLE001
+            continue
+        saved.append((f"{PUBLIC_BASE}/uploads/{key}", path))
+    return saved
+
+
+def _delete_upload_urls(urls: list) -> None:
+    """按公网 URL 删除对应落盘文件（用于历史删除/裁剪）。仅删 UPLOAD_DIR 内文件，防越权。"""
+    for u in urls or []:
+        try:
+            key = str(u).rsplit("/uploads/", 1)[-1]
+            if not key or "/" in key or ".." in key:
+                continue
+            p = os.path.join(UPLOAD_DIR, key)
+            if os.path.isfile(p):
+                os.remove(p)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+async def _submit_images_seccheck(urls: list[str], openid: str) -> None:
+    """把已落盘的图片公网 URL 异步送检微信内容安全。fail-open，绝不抛。"""
+    if not seccheck.enabled():
+        return
+    for url in urls:
+        try:
+            await seccheck.submit_image(url, openid)
+        except Exception:  # noqa: BLE001
+            pass
+
 
 
 @app.api_route("/api/wx/sec-callback", methods=["GET", "POST"])
@@ -420,8 +452,10 @@ async def wx_check(request: Request) -> JSONResponse:
             return JSONResponse({"error": "上传内容包含违规信息，已拒绝。"}, status_code=400)
 
     # 内容安全：用户上传的图片落盘成公网 URL 后异步送检（media_check_async）。
-    # 异步——不阻塞本次检查；违规结果由微信回调 /api/wx/sec-callback 下发。
-    await _submit_images_seccheck(items, openid)
+    # 同一批落盘图片同时用于「识别历史」保存原图。异步——不阻塞本次检查。
+    saved = await _persist_images(items)
+    image_urls = [u for u, _p in saved]
+    await _submit_images_seccheck(image_urls, openid)
 
     balance = wxauth.deduct(openid, wxauth.COST_PER_CHECK, "check")
     if balance is None:
@@ -433,6 +467,7 @@ async def wx_check(request: Request) -> JSONResponse:
     job_id = uuid.uuid4().hex
     _JOBS[job_id] = {
         "events": [], "done": False, "owner": openid,
+        "image_urls": image_urls, "history_saved": False,
         "created": time.time(), "updated": time.time(),
         "cond": asyncio.Condition(),
     }
@@ -475,11 +510,62 @@ async def wx_result(request: Request) -> JSONResponse:
         job["refunded"] = True
         wxauth.refund(openid, wxauth.COST_PER_CHECK, "check_failed")
 
+    # 检查成功完成：把图片+结果存入识别历史（仅一次）。失败/出错不存。
+    if result and not error and not job.get("history_saved"):
+        job["history_saved"] = True
+        try:
+            wxauth.add_history(openid, job.get("image_urls") or [], result)
+            removed = wxauth.trim_history(openid)
+            _delete_upload_urls(removed)
+        except Exception:  # noqa: BLE001 — 历史保存失败不影响结果返回
+            pass
+
     step = max([e.get("step", 0) for e in events if e.get("status") == "done"], default=0)
     return JSONResponse(
         {"done": bool(job["done"]), "step": step, "extract": extract,
          "rules": rules, "result": result, "error": error}
     )
+
+
+# ───────────────────────────── 小程序识别历史（图片+结果存服务器，可删除）─────────────────────────────
+@app.get("/api/wx/history")
+async def wx_history(request: Request) -> JSONResponse:
+    """列出当前用户的识别历史（摘要 + 首图缩略），按时间倒序。"""
+    openid, err = _wx_guard(request)
+    if err:
+        return err
+    return JSONResponse({"items": wxauth.list_history(openid)})
+
+
+@app.get("/api/wx/history/detail")
+async def wx_history_detail(request: Request) -> JSONResponse:
+    """取某条历史完整结果（result + images），仅本人可取。"""
+    openid, err = _wx_guard(request)
+    if err:
+        return err
+    hid = request.query_params.get("id", "")
+    h = wxauth.get_history(openid, hid)
+    if h is None:
+        return JSONResponse({"error": "历史不存在。"}, status_code=404)
+    return JSONResponse(h)
+
+
+@app.post("/api/wx/history/delete")
+async def wx_history_delete(request: Request) -> JSONResponse:
+    """删除某条历史（仅本人），并删除其图片文件。"""
+    openid, err = _wx_guard(request)
+    if err:
+        return err
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        data = {}
+    hid = (data or {}).get("id", "")
+    if not hid:
+        return JSONResponse({"error": "缺少 id"}, status_code=400)
+    removed = wxauth.delete_history(openid, hid)
+    _delete_upload_urls(removed)
+    return JSONResponse({"ok": True})
 
 
 # 同源托管静态前端（挂在最后，避免吞掉 /api/*）。前后端分离纯 API 部署可设 FOODLABEL_SERVE_WEB=0。

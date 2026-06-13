@@ -40,4 +40,8 @@ Page({
   onOpenPrivacy() {
     wx.navigateTo({ url: '/pages/privacy/privacy' });
   },
+
+  onOpenHistory() {
+    wx.navigateTo({ url: '/pages/history/history' });
+  },
 });

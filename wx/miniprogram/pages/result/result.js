@@ -20,6 +20,8 @@ const FIELD_ORDER = [
   'nutrition_warning', 'other_text',
 ];
 
+const api = require('../../utils/api.js');
+
 Page({
   data: {
     verdict: null,
@@ -34,7 +36,25 @@ Page({
     risks: [],
   },
 
-  onLoad() {
+  onLoad(options) {
+    // 来自历史：带 hid → 从服务器拉取该条历史的完整结果渲染。
+    if (options && options.hid) {
+      wx.showLoading({ title: '加载中…' });
+      api.fetchHistoryDetail(options.hid).then((d) => {
+        wx.hideLoading();
+        if (d && d.result) {
+          this._render(d.result);
+        } else {
+          wx.showToast({ title: '历史不存在', icon: 'none' });
+          setTimeout(() => wx.navigateBack(), 1200);
+        }
+      }).catch(() => {
+        wx.hideLoading();
+        wx.showToast({ title: '加载失败', icon: 'none' });
+        setTimeout(() => wx.navigateBack(), 1200);
+      });
+      return;
+    }
     const r = (getApp().globalData && getApp().globalData.lastResult) || null;
     if (!r) {
       wx.showToast({ title: '结果已失效，请重新检查', icon: 'none' });

@@ -15,6 +15,10 @@
       </view>
       <view class="row-arrow">›</view>
     </button>
+    <view class="row" bindtap="onOpenHistory">
+      <view class="row-l"><view class="row-t">识别历史</view></view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="row" bindtap="onOpenPrivacy">
       <view class="row-l"><view class="row-t">隐私说明</view></view>
       <view class="row-arrow">›</view>

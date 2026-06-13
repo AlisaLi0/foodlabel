@@ -84,6 +84,23 @@ def init_db() -> None:
             openid TEXT, delta INTEGER, reason TEXT, ts INTEGER
         )"""
     )
+    # 小程序识别历史：图片与结果存服务器，用户可手动删除。seq 自增保证同秒内排序稳定。
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS history(
+            id TEXT PRIMARY KEY,
+            seq INTEGER,
+            openid TEXT NOT NULL,
+            created_at INTEGER,
+            verdict TEXT,
+            score INTEGER,
+            food_name TEXT,
+            images TEXT,
+            result TEXT
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_history_openid ON history(openid, seq DESC)"
+    )
     conn.close()
 
 
@@ -249,3 +266,117 @@ async def jscode2session(code: str) -> dict:
     if "openid" not in j:
         raise WxError(400, j.get("errmsg") or "微信登录失败")
     return j
+
+
+# ── 识别历史（图片+结果存服务器，用户可删除）──
+import json as _json
+import uuid as _uuid
+
+# 每用户保留的历史条数上限，超出删最旧（同时其图片文件由上层清理）。
+HISTORY_MAX = int(os.getenv("FOODLABEL_WX_HISTORY_MAX", "50"))
+
+
+def add_history(openid: str, images: list[str], result: dict) -> str:
+    """新增一条识别历史，返回 id。images 为公网图片 URL 列表。"""
+    hid = _uuid.uuid4().hex
+    now = int(time.time())
+    summary = (result or {}).get("summary") or {}
+    extracted = (result or {}).get("extracted") or {}
+    food_name = extracted.get("food_name") if isinstance(extracted.get("food_name"), str) else ""
+    conn = _db()
+    # seq 用全表当前最大值 +1，保证严格递增（同秒内排序稳定）。
+    row = conn.execute("SELECT COALESCE(MAX(seq), 0) AS m FROM history").fetchone()
+    seq = int(row["m"]) + 1
+    conn.execute(
+        "INSERT INTO history(id, seq, openid, created_at, verdict, score, food_name, images, result)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
+        (
+            hid, seq, openid, now,
+            summary.get("verdict") or "issues",
+            int(summary.get("score") or 0),
+            food_name or "",
+            _json.dumps(images or [], ensure_ascii=False),
+            _json.dumps(result or {}, ensure_ascii=False),
+        ),
+    )
+    conn.close()
+    return hid
+
+
+def list_history(openid: str, limit: int = HISTORY_MAX) -> list[dict]:
+    """列出某用户的历史（不含完整 result，仅摘要 + 首图缩略）。按时间倒序。"""
+    conn = _db()
+    rows = conn.execute(
+        "SELECT id, created_at, verdict, score, food_name, images FROM history"
+        " WHERE openid=? ORDER BY seq DESC LIMIT ?",
+        (openid, limit),
+    ).fetchall()
+    conn.close()
+    out: list[dict] = []
+    for r in rows:
+        try:
+            imgs = _json.loads(r["images"] or "[]")
+        except (ValueError, TypeError):
+            imgs = []
+        out.append({
+            "id": r["id"], "ts": r["created_at"], "verdict": r["verdict"],
+            "score": r["score"], "food_name": r["food_name"],
+            "thumb": imgs[0] if imgs else "",
+        })
+    return out
+
+
+def get_history(openid: str, hid: str) -> dict | None:
+    """取某条历史完整内容（result + images），仅本人可取。"""
+    conn = _db()
+    r = conn.execute(
+        "SELECT id, created_at, images, result FROM history WHERE id=? AND openid=?",
+        (hid, openid),
+    ).fetchone()
+    conn.close()
+    if not r:
+        return None
+    try:
+        result = _json.loads(r["result"] or "{}")
+    except (ValueError, TypeError):
+        result = {}
+    try:
+        images = _json.loads(r["images"] or "[]")
+    except (ValueError, TypeError):
+        images = []
+    return {"id": r["id"], "ts": r["created_at"], "result": result, "images": images}
+
+
+def delete_history(openid: str, hid: str) -> list[str]:
+    """删除某条历史（仅本人）。返回被删记录的图片 URL 列表，供上层删文件。"""
+    conn = _db()
+    r = conn.execute(
+        "SELECT images FROM history WHERE id=? AND openid=?", (hid, openid)
+    ).fetchone()
+    if not r:
+        conn.close()
+        return []
+    conn.execute("DELETE FROM history WHERE id=? AND openid=?", (hid, openid))
+    conn.close()
+    try:
+        return _json.loads(r["images"] or "[]")
+    except (ValueError, TypeError):
+        return []
+
+
+def trim_history(openid: str, keep: int = HISTORY_MAX) -> list[str]:
+    """超出上限时删除最旧历史。返回被删记录的所有图片 URL，供上层删文件。"""
+    conn = _db()
+    rows = conn.execute(
+        "SELECT id, images FROM history WHERE openid=? ORDER BY seq DESC", (openid,)
+    ).fetchall()
+    extra = rows[keep:]
+    removed: list[str] = []
+    for r in extra:
+        conn.execute("DELETE FROM history WHERE id=?", (r["id"],))
+        try:
+            removed += _json.loads(r["images"] or "[]")
+        except (ValueError, TypeError):
+            pass
+    conn.close()
+    return removed

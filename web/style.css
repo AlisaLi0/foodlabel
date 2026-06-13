@@ -256,6 +256,40 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
 .disclaimer { color: var(--muted); font-size: 12px; margin-top: 8px; }
 
+/* 识别历史（本地） */
+.history-box {
+  margin-top: 22px;
+  background: var(--card);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+.history-head { display: flex; align-items: center; justify-content: space-between; }
+.history-head h2 { margin: 0; font-size: 16px; }
+.history-tip { color: var(--muted); font-size: 12px; margin: 6px 0 12px; }
+.history-list { list-style: none; margin: 0; padding: 0; }
+.history-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 4px; border-bottom: 1px solid var(--line); cursor: pointer;
+}
+.history-item:last-child { border-bottom: none; }
+.history-item:hover { background: #f7f8fa; }
+.hi-main { flex: 1; min-width: 0; }
+.hi-name { font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hi-meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12.5px; }
+.hi-meta .hv { padding: 1px 8px; border-radius: 999px; font-size: 12px; }
+.hi-meta .hv.v-compliant { background: #e7f6ec; color: var(--pass); }
+.hi-meta .hv.v-issues { background: #fdf6e3; color: var(--warn); }
+.hi-meta .hv.v-non_compliant { background: #fdecea; color: var(--fail); }
+.hi-meta .hv.v-not_a_label { background: #eef0f2; color: var(--muted); }
+.hi-meta .hscore { color: var(--ink); font-variant-numeric: tabular-nums; }
+.hi-meta .htime { color: var(--muted); }
+.hi-del {
+  flex: none; width: 28px; height: 28px; border: none; border-radius: 50%;
+  background: #f0f1f3; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1;
+}
+.hi-del:hover { background: #fdecea; color: var(--fail); }
+
 @media (max-width: 560px) {
   .kv td.k { width: 92px; }
   .checks td.it { width: auto; display: block; }

@@ -1,0 +1,36 @@
+.page { padding: 20rpx 24rpx 48rpx; }
+
+.empty { text-align: center; padding: 140rpx 0; }
+.empty-icon { font-size: 80rpx; }
+.empty-text { font-size: 30rpx; margin-top: 18rpx; }
+.empty-sub { font-size: 24rpx; margin-top: 10rpx; }
+
+.list { display: flex; flex-direction: column; gap: 18rpx; }
+.hcard {
+  display: flex; align-items: stretch;
+  background: #fff; border-radius: 16rpx; overflow: hidden;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,.04);
+}
+.hcard-main { flex: 1; display: flex; align-items: center; gap: 20rpx; padding: 20rpx; min-width: 0; }
+.hthumb { width: 120rpx; height: 120rpx; border-radius: 12rpx; background: #f0f1f3; flex: none; }
+.hthumb-doc {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--brand); font-size: 44rpx; font-weight: 700; background: #f0f8f4;
+}
+.hinfo { flex: 1; min-width: 0; }
+.hname { font-size: 30rpx; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hmeta { display: flex; align-items: center; gap: 14rpx; margin-top: 10rpx; }
+.hv { font-size: 22rpx; padding: 2rpx 14rpx; border-radius: 999rpx; }
+.hv.v-compliant { background: #e7f6ec; color: #1a7f37; }
+.hv.v-issues { background: #fdf6e3; color: #b7791f; }
+.hv.v-non_compliant { background: #fdecea; color: #c2362f; }
+.hv.v-not_a_label { background: #eef0f2; color: #6b7280; }
+.hscore { font-size: 24rpx; color: var(--ink); }
+.htime { font-size: 22rpx; margin-top: 10rpx; }
+.hdel {
+  flex: none; display: flex; align-items: center; padding: 0 28rpx;
+  color: #c2362f; font-size: 26rpx; border-left: 1rpx solid #f0f1f3;
+}
+.hdel:active { background: #fdecea; }
+
+.tip { text-align: center; font-size: 22rpx; margin-top: 28rpx; }

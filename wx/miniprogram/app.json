@@ -3,6 +3,7 @@
   "pages": [
     "pages/index/index",
     "pages/result/result",
+    "pages/history/history",
     "pages/me/me",
     "pages/privacy/privacy"
   ],
