@@ -1,13 +1,13 @@
 /* 标签识别 — 食品标签国标合规检查 */
 :root {
-  --bg: #f4f6f4;
+  --bg: #f3f6fb;
   --card: #ffffff;
   --ink: #1b2430;
   --muted: #667085;
-  --line: #e6e9ee;
-  --brand: #15704b;
-  --brand-d: #0e5234;
-  --brand-l: #1f8a5c;
+  --line: #e4e8ef;
+  --brand: #1565c4;
+  --brand-d: #0d4a9c;
+  --brand-l: #2b82ea;
   --pass: #1a7f37;
   --fail: #c2362f;
   --warn: #b7791f;
@@ -67,14 +67,14 @@ main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
   color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500;
   padding: 7px 13px; border-radius: 8px; transition: background .15s, color .15s; white-space: nowrap;
 }
-.nav-links a:hover { background: #eef3ef; color: var(--brand-d); }
+.nav-links a:hover { background: #eef3fb; color: var(--brand-d); }
 
 /* ── Hero ── */
 .hero {
   color: #fff;
   background:
-    radial-gradient(900px 360px at 50% -140px, rgba(31,138,92,.55), transparent 70%),
-    linear-gradient(160deg, #16704b 0%, #0e5234 100%);
+    radial-gradient(900px 360px at 50% -140px, rgba(56,132,240,.55), transparent 70%),
+    linear-gradient(160deg, #1a5cba 0%, #0d3f93 100%);
 }
 .hero-inner { max-width: 860px; margin: 0 auto; padding: 52px 22px 72px; text-align: center; }
 .hero-title { margin: 0 0 14px; font-size: 33px; font-weight: 800; letter-spacing: .5px; line-height: 1.25; }
@@ -95,7 +95,7 @@ main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
 .feature-ic {
   width: 44px; height: 44px; border-radius: 12px; margin-bottom: 12px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--brand); background: #e8f3ed;
+  color: var(--brand); background: #e7effb;
 }
 .feature h3 { margin: 0 0 6px; font-size: 15.5px; }
 .feature p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.65; }
@@ -138,11 +138,11 @@ body > main, body > .layout, body > .legal { width: 100%; }
   text-align: center;
   transition: border-color .15s, background .15s, box-shadow .15s;
 }
-.uploader.drag { border-color: var(--brand); background: #f0f8f4; box-shadow: 0 0 0 4px rgba(21,112,75,.12); }
+.uploader.drag { border-color: var(--brand); background: #eef5fe; box-shadow: 0 0 0 4px rgba(21,101,196,.14); }
 .up-icon {
   width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 16px;
   display: flex; align-items: center; justify-content: center;
-  color: var(--brand); background: #e8f3ed;
+  color: var(--brand); background: #e7effb;
 }
 .up-title { margin: 0 0 8px; font-size: 20px; font-weight: 700; }
 .lead { margin: 0 auto 18px; max-width: 560px; color: var(--muted); font-size: 14.5px; }
@@ -160,11 +160,11 @@ body > main, body > .layout, body > .legal { width: 100%; }
   cursor: pointer;
   transition: background .14s, border-color .14s, filter .14s, opacity .14s;
 }
-.btn:hover { background: #f3f5f3; border-color: #d6dbe0; }
-.btn.primary { background: linear-gradient(135deg, var(--brand-l), var(--brand-d)); border-color: transparent; color: #fff; box-shadow: 0 2px 10px rgba(21,112,75,.28); }
+.btn:hover { background: #eff3f9; border-color: #d3dae3; }
+.btn.primary { background: linear-gradient(135deg, var(--brand-l), var(--brand-d)); border-color: transparent; color: #fff; box-shadow: 0 2px 10px rgba(21,101,196,.28); }
 .btn.primary:hover { filter: brightness(1.06); background: linear-gradient(135deg, var(--brand-l), var(--brand-d)); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); box-shadow: none; }
-.btn.ghost:hover { background: #eef1ee; }
+.btn.ghost:hover { background: #eaf0f8; }
 .btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; filter: none; }
 .hint { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
 
@@ -180,7 +180,7 @@ body > main, body > .layout, body > .legal { width: 100%; }
 .thumbs .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .thumbs .thumb.doc {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; padding: 8px; text-align: center; background: #f0f8f4;
+  gap: 4px; padding: 8px; text-align: center; background: #eef5fe;
 }
 .thumbs .thumb.doc .docicon {
   width: 30px; height: 30px; border-radius: 6px;
@@ -410,7 +410,7 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 /* 全站页脚 */
 .site-footer {
   width: 100%;
-  background: #11241a;
+  background: #0f1e35;
   padding: 30px 16px 34px;
   text-align: center; color: rgba(255,255,255,.66); font-size: 13px;
 }
