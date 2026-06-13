@@ -215,7 +215,7 @@ function renderDoc(doc) {
   const note = doc.note ? `<p class="src-note">${esc(doc.note)}</p>` : "";
   const content = document.getElementById("docsContent");
   const body = doc.pdf
-    ? `<iframe class="pdf-frame" src="${esc(doc.pdf)}#view=FitH" title="${esc(doc.title)}"></iframe>`
+    ? `<iframe class="pdf-frame" src="${esc(doc.pdf)}#view=FitH&pagemode=none&navpanes=0" title="${esc(doc.title)}"></iframe>`
     : `<div class="doctext" id="docText">—</div>`;
   content.innerHTML =
     `<div class="doc-crumb">法规原文<span class="sep">›</span>${esc(doc.group)}</div>` +
