@@ -94,7 +94,18 @@ Page({
       fail: (err) => {
         const msg = (err && err.errMsg) || '';
         if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-        wx.showToast({ title: '打开相册/相机失败：' + msg, icon: 'none', duration: 3000 });
+        // scope 未声明：后台《用户隐私保护指引》尚未生效（微信平台层拦截，非本页代码问题）
+        if (msg.indexOf('privacy') !== -1 || msg.indexOf('scope is not declared') !== -1) {
+          wx.showModal({
+            title: '隐私授权未生效',
+            content: '需在小程序后台《用户隐私保护指引》声明「收集你选中的照片或视频信息」并提交生效；'
+              + '若已提交，请在开发者工具「清缓存→全部清除」后重新编译。',
+            showCancel: false,
+            confirmText: '我知道了',
+          });
+          return;
+        }
+        wx.showToast({ title: '打开相册失败：' + msg, icon: 'none', duration: 3000 });
       },
     });
   },
