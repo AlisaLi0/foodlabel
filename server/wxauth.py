@@ -33,8 +33,8 @@ _DB_PATH = os.getenv(
     "FOODLABEL_WX_DB",
     os.path.join(os.path.dirname(__file__), "..", "data", "wx.db"),
 )
-SIGNUP_CREDITS = int(os.getenv("FOODLABEL_WX_SIGNUP_CREDITS", "5"))
-DAILY_FREE = int(os.getenv("FOODLABEL_WX_DAILY_FREE", "5"))
+SIGNUP_CREDITS = int(os.getenv("FOODLABEL_WX_SIGNUP_CREDITS", "10"))
+DAILY_FREE = int(os.getenv("FOODLABEL_WX_DAILY_FREE", "10"))
 SHARE_REWARD = int(os.getenv("FOODLABEL_WX_SHARE_REWARD", "2"))
 COST_PER_CHECK = int(os.getenv("FOODLABEL_WX_COST_PER_CHECK", "1"))
 _TOKEN_TTL = 30 * 86400  # 30 天
