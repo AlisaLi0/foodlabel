@@ -307,3 +307,14 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .checks td.it { width: auto; display: block; }
   .checks td.st { width: auto; }
 }
+
+/* 全站页脚 */
+.site-footer {
+  max-width: 1200px; margin: 0 auto; padding: 24px 16px 40px;
+  text-align: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line);
+}
+.site-footer a { color: var(--brand-d); text-decoration: none; }
+.site-footer a:hover { text-decoration: underline; }
+.site-footer .sep { margin: 0 8px; color: var(--line); }
+.site-footer .foot-note { margin-top: 10px; font-size: 12px; }
+
