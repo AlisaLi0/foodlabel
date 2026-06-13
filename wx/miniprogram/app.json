@@ -1,5 +1,5 @@
 {
-  "__usePrivacyCheck__": true,
+  "__usePrivacyCheck__": false,
   "pages": [
     "pages/index/index",
     "pages/result/result",

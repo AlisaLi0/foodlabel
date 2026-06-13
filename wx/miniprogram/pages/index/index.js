@@ -44,6 +44,11 @@ Page({
         this.setData({ tempFilePath: f.tempFilePath, statusText: '' });
         this._recompute();
       },
+      fail: (err) => {
+        const msg = (err && err.errMsg) || '';
+        if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
+        wx.showToast({ title: '打开相册/相机失败：' + msg, icon: 'none', duration: 3000 });
+      },
     });
   },
 
