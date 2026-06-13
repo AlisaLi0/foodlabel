@@ -1,0 +1,6 @@
+rapidocr==3.8.3
+onnxruntime==1.26.0
+pillow==12.2.0
+fastapi==0.136.3
+uvicorn==0.49.0
+python-multipart==0.0.20

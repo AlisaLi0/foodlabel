@@ -35,6 +35,9 @@ SF_BASE_URL = os.getenv("SF_BASE_URL", "https://api.siliconflow.cn/v1").rstrip("
 SF_API_KEY = os.getenv("SF_API_KEY", "")
 # 本地 RapidOCR 显示名（用于 /api/health 与结果归并）。
 RAPIDOCR_NAME = "RapidOCR (PP-OCRv4 mobile)"
+# RapidOCR 远程 HTTP 服务地址（4090 Docker，经 autossh 反向隧道）。
+# 设了就走远程（卸载 tencent 弱机 CPU 压力）；留空则在本进程内直跑（需装 rapidocr）。
+RAPIDOCR_URL = os.getenv("FOODLABEL_RAPIDOCR_URL", "").strip()
 # OCR 引擎列表：逗号分隔，可混合本地与远程，**全部并行执行**、结果都喂给识读步骤做参考。
 #   - "rapidocr"   → 本地 RapidOCR（CPU，开源 Apache-2.0，确定性、零成本）
 #   - 其它模型 id（deepseek-ai/DeepSeek-OCR、Qwen/Qwen3-VL-8B-Instruct 等）→ 远程 VLM OCR
@@ -253,6 +256,28 @@ def _rapidocr_recognize(image_bytes: bytes) -> str:
     return "\n".join(t for t in txts if t)
 
 
+async def _rapidocr_remote(image_bytes: bytes) -> str:
+    """调远程 RapidOCR HTTP 服务（4090 Docker）识别，返回文本。"""
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        resp = await client.post(
+            RAPIDOCR_URL,
+            files={"image": ("label.jpg", image_bytes, "image/jpeg")},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    if data.get("error"):
+        raise LLMError(data["error"])
+    return data.get("text", "")
+
+
+async def _rapidocr_text(image_data_url: str) -> str:
+    """RapidOCR 识别：设了 RAPIDOCR_URL 走远程 4090，否则本进程内直跑。"""
+    raw = _data_url_to_bytes(image_data_url)
+    if RAPIDOCR_URL:
+        return await _rapidocr_remote(raw)
+    return await asyncio.to_thread(_rapidocr_recognize, raw)
+
+
 async def ocr_all(image_data_url: str) -> list[dict]:
     """并行跑所有配置的 OCR 引擎（本地 RapidOCR + 远程 VLM 等），所有结果都返回。
 
@@ -262,8 +287,7 @@ async def ocr_all(image_data_url: str) -> list[dict]:
         name = RAPIDOCR_NAME if engine.lower() == "rapidocr" else engine
         try:
             if engine.lower() == "rapidocr":
-                raw = _data_url_to_bytes(image_data_url)
-                text = await asyncio.to_thread(_rapidocr_recognize, raw)
+                text = await _rapidocr_text(image_data_url)
             else:
                 text = await ocr(engine, image_data_url)
             return {"model": name, "text": text, "error": None}

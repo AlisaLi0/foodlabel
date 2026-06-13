@@ -1,0 +1,19 @@
+[Unit]
+Description=autossh reverse tunnel: 4090 RapidOCR :8512 -> tencent 127.0.0.1:8515 (foodlabel OCR)
+After=network-online.target rapidocr-onnx-4090.service
+Wants=network-online.target
+
+[Service]
+# 把 4090 本地 127.0.0.1:8512 反向暴露到 tencent loopback 127.0.0.1:8515，
+# foodlabel 后端经 FOODLABEL_RAPIDOCR_URL=http://127.0.0.1:8515/ocr 消费。
+# 与 autossh-texify-4090.service 同模板（低权限 tunnel 用户）。
+ExecStart=/usr/bin/autossh -M 0 -N \
+  -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
+  -o IdentitiesOnly=yes -i /home/lkang/docs/ssh/id_rsa \
+  -o UserKnownHostsFile=/home/lkang/docs/ssh/known_hosts -o StrictHostKeyChecking=accept-new \
+  -R 127.0.0.1:8515:127.0.0.1:8512 tunnel@82.156.115.203
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=RapidOCR HTTP service (PP-OCRv4 mobile, CPU) for foodlabel — 4090, capped 16 cores like texify
+After=docker.service
+Requires=docker.service
+
+[Service]
+# 与 texify 同模板：限 16 核 / 8G，限各 BLAS/OMP 线程数防止吃满整机。
+ExecStartPre=-/usr/bin/docker rm -f rapidocr-onnx-4090
+ExecStart=/usr/bin/docker run --name rapidocr-onnx-4090 --rm \
+  --cpus=16 --memory=8g --memory-swap=8g \
+  -e OMP_NUM_THREADS=16 -e MKL_NUM_THREADS=16 -e OPENBLAS_NUM_THREADS=16 -e NUMEXPR_NUM_THREADS=16 \
+  -p 127.0.0.1:8512:8512 rapidocr-http:cpu
+ExecStop=-/usr/bin/docker stop rapidocr-onnx-4090
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
