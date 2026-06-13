@@ -4,7 +4,7 @@
 // 后端 API base。前后端分离：前端可单独部署，指向任意后端。解析顺序：
 //   1. window.FOODLABEL_API_BASE（index.html 内联设置）
 //   2. <meta name="foodlabel-api-base" content="https://...">
-//   3. ""（同源，相对 <base href> 解析为 /biaoqianshibie/api/*）
+//   3. ""（同源，相对 <base href> 解析为 /foodlabel/api/*）
 const API_BASE = (
   (typeof window !== "undefined" && window.FOODLABEL_API_BASE) ||
   document.querySelector('meta[name="foodlabel-api-base"]')?.content ||

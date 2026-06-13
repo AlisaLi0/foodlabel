@@ -30,7 +30,7 @@ _ENABLE = os.getenv("FOODLABEL_SECCHECK_ENABLE", "1") != "0"
 # 消息推送（接收 media_check_async 异步结果）配置：在小程序后台「开发设置→消息推送」填同样的 Token。
 CALLBACK_TOKEN = os.getenv("FOODLABEL_WX_CALLBACK_TOKEN", "")
 # 公网基址，用于把落盘图片拼成微信可访问的 media_url（默认线上站点子路径）。
-PUBLIC_BASE = os.getenv("FOODLABEL_PUBLIC_BASE", "https://docs-tools.online/biaoqianshibie").rstrip("/")
+PUBLIC_BASE = os.getenv("FOODLABEL_PUBLIC_BASE", "https://docs-tools.online/foodlabel").rstrip("/")
 
 # access_token 进程内缓存：{token, exp}。stable_token 有效期 7200s，提前 5min 过期刷新。
 _token_cache: dict = {"token": "", "exp": 0.0}

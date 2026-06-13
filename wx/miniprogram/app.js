@@ -6,7 +6,7 @@ App({
     token: '',
     credits: null,
     // 后端：复用 docs-tools.online 的 foodlabel 后端（子路径）
-    apiBase: 'https://docs-tools.online/biaoqianshibie',
+    apiBase: 'https://docs-tools.online/foodlabel',
   },
 
   onLaunch() {

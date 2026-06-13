@@ -51,7 +51,7 @@ CHECK_MAX_PER_HOUR = int(os.getenv("FOODLABEL_MAX_PER_HOUR", "60"))
 # 小程序图片落盘目录（公网可访问，用于微信 media_check_async 的 media_url）。挂在 web 静态目录下。
 UPLOAD_DIR = os.getenv("FOODLABEL_UPLOAD_DIR", os.path.join(WEB_DIR, "uploads"))
 # 落盘图片的公网基址（拼 media_url）。
-PUBLIC_BASE = os.getenv("FOODLABEL_PUBLIC_BASE", "https://docs-tools.online/biaoqianshibie").rstrip("/")
+PUBLIC_BASE = os.getenv("FOODLABEL_PUBLIC_BASE", "https://docs-tools.online/foodlabel").rstrip("/")
 
 app = FastAPI(title="biaoqianshibie", docs_url=None, redoc_url=None)
 

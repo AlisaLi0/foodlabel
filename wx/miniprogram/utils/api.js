@@ -1,5 +1,5 @@
 // utils/api.js — 封装对 foodlabel 后端的 wx.request / wx.uploadFile
-const API_BASE = 'https://docs-tools.online/biaoqianshibie';
+const API_BASE = 'https://docs-tools.online/foodlabel';
 
 function getToken() {
   const app = getApp();
