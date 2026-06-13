@@ -25,6 +25,9 @@ body {
   background: var(--bg);
   color: var(--ink);
   line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 .topbar {
   background: var(--brand);
@@ -40,6 +43,9 @@ body {
 .topbar .topnav { margin-left: auto; color: #fff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 4px 10px; border: 1px solid rgba(255,255,255,.5); border-radius: 8px; white-space: nowrap; }
 .topbar .topnav:hover { background: rgba(255,255,255,.15); }
 main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
+
+/* body 为 flex 列布局：主内容区撑开、页脚贴底 */
+body > main, body > .layout, body > .legal { flex: 1 0 auto; width: 100%; }
 
 /* 左侧边栏 + 主内容布局 */
 .layout { max-width: 1200px; margin: 0 auto; display: flex; gap: 18px; padding: 20px 16px 60px; align-items: flex-start; }
@@ -310,11 +316,15 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
 /* 全站页脚 */
 .site-footer {
-  max-width: 1200px; margin: 0 auto; padding: 24px 16px 40px;
+  margin-top: auto;
+  width: 100%;
+  padding: 24px 16px 30px;
   text-align: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line);
 }
 .site-footer a { color: var(--brand-d); text-decoration: none; }
 .site-footer a:hover { text-decoration: underline; }
 .site-footer .sep { margin: 0 8px; color: var(--line); }
 .site-footer .foot-note { margin-top: 10px; font-size: 12px; }
+.site-footer .foot-beian { margin-top: 8px; font-size: 12px; }
+.site-footer .foot-beian a { color: var(--muted); }
 
