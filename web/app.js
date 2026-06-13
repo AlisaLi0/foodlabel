@@ -595,10 +595,6 @@ function renderFindings(kind, list) {
   }).join("");
 }
 
-// 顶部显示当前依据的标准
-fetch(api("api/health")).then((r) => r.json()).then((d) => {
-  if (d.standards) $("standards").textContent = d.standards;
-}).catch(() => {});
 
 // ───────────────────────────── 识别历史（仅本地 localStorage）─────────────────────────────
 // 历史只存在用户当前浏览器，不上传服务器。每条存：时间、结论、评分、食品名、完整 result（供回看）。

@@ -13,28 +13,40 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">食品标签国标合规检查</div>
-    <div class="sub" id="standards">GB 7718-2025 / GB 28050-2025 / 食品标识监督管理办法（总局令第100号）</div>
-    <a class="topnav" href="standards.html">Docs</a>
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href=".">
+        <span class="nav-logo" aria-hidden="true">标</span>
+        <span class="nav-name">食品标签合规检查</span>
+      </a>
+      <nav class="nav-links">
+        <a href="standards.html">法规原文</a>
+        <a href="terms.html">服务条款</a>
+        <a href="privacy.html">隐私条款</a>
+      </nav>
+    </div>
   </header>
 
-  <div class="layout">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-head">
-        <span class="sidebar-title">识别历史</span>
-        <button id="historyClear" class="hclear" title="清空">清空</button>
+  <section class="hero">
+    <div class="hero-inner">
+      <h1 class="hero-title">食品标签国标合规检查</h1>
+      <p class="hero-sub">上传预包装食品的标签照片或文档，依据现行国家标准逐项核查，秒级生成可追溯的合规检查报告。</p>
+      <div class="hero-badges">
+        <span class="hero-badge">GB 7718-2025</span>
+        <span class="hero-badge">GB 28050-2025</span>
+        <span class="hero-badge">食品标识监督管理办法 · 总局令第100号</span>
       </div>
-      <p class="history-tip">仅保存在本浏览器，不上传服务器。</p>
-      <ul id="historyList" class="history-list"></ul>
-      <p id="historyEmpty" class="history-empty muted">暂无历史。检查后会出现在这里。</p>
-    </aside>
+    </div>
+  </section>
 
+  <div class="layout">
     <main class="content">
     <section class="uploader" id="drop">
-      <p class="lead">上传预包装食品的<strong>标签照片</strong>（最多 4 张，自动识图 OCR），
-        或直接上传 <strong>PDF / Word / TXT</strong> 文本（已是文字则<strong>跳过识图</strong>、直接比对），
-        对照现行国家标准逐项判断是否合规。</p>
+      <div class="up-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      </div>
+      <h2 class="up-title">上传标签，开始合规检查</h2>
+      <p class="lead">支持<strong>标签照片</strong>（最多 4 张，自动识图 OCR），或 <strong>PDF / Word / TXT</strong> 文档（已是文字则<strong>跳过识图</strong>、直接比对），对照现行国家标准逐项判断是否合规。</p>
       <input type="file" id="file" accept="image/*,.pdf,.doc,.docx,.txt,.md,.csv" multiple hidden />
       <div class="actions">
         <button id="pick" class="btn primary">选择图片 / 文档</button>
@@ -114,7 +126,42 @@
         不构成官方监管结论或法律意见。最终以监管部门与标准原文为准。相关标准 2027-03-16 正式实施。</p>
     </section>
     </main>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <span class="sidebar-title">识别历史</span>
+        <button id="historyClear" class="hclear" title="清空">清空</button>
+      </div>
+      <p class="history-tip">仅保存在本浏览器，不上传服务器。</p>
+      <ul id="historyList" class="history-list"></ul>
+      <p id="historyEmpty" class="history-empty muted">暂无历史。检查后会出现在这里。</p>
+    </aside>
   </div>
+
+  <section class="features">
+    <div class="features-inner">
+      <article class="feature">
+        <div class="feature-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+        <h3>多模型 OCR 识图</h3>
+        <p>双 OCR 引擎交叉校验，图片、PDF、Word、TXT 均可识读，最大程度还原标签原文。</p>
+      </article>
+      <article class="feature">
+        <div class="feature-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="m9 14 2 2 4-4"/></svg></div>
+        <h3>对照现行国家标准</h3>
+        <p>依据 GB 7718-2025、GB 28050-2025 及总局令第 100 号，逐条比对强制标示要求。</p>
+      </article>
+      <article class="feature">
+        <div class="feature-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></div>
+        <h3>结果可追溯</h3>
+        <p>缺失点、问题点、风险点分类列示，每项附标准条款依据与整改建议，便于复核。</p>
+      </article>
+      <article class="feature">
+        <div class="feature-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <h3>隐私保护</h3>
+        <p>上传内容仅用于本次识别，检查历史仅保存在你本地浏览器，不上传服务器。</p>
+      </article>
+    </div>
+  </section>
 
   <footer class="site-footer">
     <a href="standards.html">法规原文</a>
