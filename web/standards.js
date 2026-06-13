@@ -67,7 +67,6 @@ const DOCS = [
     sub: "2025-03-14 公布 · 2027-03-16 施行 · 国家市场监督管理总局（共 7 章 54 条）",
     links: [
       { label: "官方来源：司法部 部门规章库", url: "https://www.moj.gov.cn/pub/sfbgw/flfggz/flfggzbmgz/202511/t20251106_527628.html", src: true },
-      { label: "国家市场监督管理总局", url: "https://www.samr.gov.cn/" },
       { label: "下载本页文本", url: "docs/decree-100.md" },
     ],
     note: "《食品标识监督管理办法》（国家市场监督管理总局令第100号）由司法部「国家法律法规数据库 / 部门规章」收录全文。",
