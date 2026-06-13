@@ -19,6 +19,10 @@
       <view class="row-l"><view class="row-t">识别历史</view></view>
       <view class="row-arrow">›</view>
     </view>
+    <view class="row" bindtap="onOpenStandards">
+      <view class="row-l"><view class="row-t">法规原文</view></view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="row" bindtap="onOpenPrivacy">
       <view class="row-l"><view class="row-t">隐私说明</view></view>
       <view class="row-arrow">›</view>

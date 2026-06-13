@@ -1,0 +1,23 @@
+.page { padding-bottom: 48rpx; }
+.intro { font-size: 24rpx; line-height: 1.7; margin: 24rpx; }
+
+.d-title { font-size: 30rpx; font-weight: 700; line-height: 1.4; }
+.d-sub { font-size: 23rpx; margin-top: 8rpx; line-height: 1.6; }
+
+.links { margin-top: 18rpx; }
+.link {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18rpx 20rpx; margin-top: 12rpx;
+  background: #f5f8fd; border: 1rpx solid #e4e8ef; border-radius: 12rpx;
+}
+.link-t { font-size: 25rpx; color: var(--brand-d); flex: 1; line-height: 1.5; margin-right: 16rpx; }
+.link-copy { font-size: 22rpx; color: #fff; background: var(--brand); padding: 6rpx 16rpx; border-radius: 20rpx; flex: none; }
+
+.toggle { margin-top: 20rpx; font-size: 26rpx; font-weight: 600; color: var(--brand-d); }
+
+.fulltext { margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx solid #f0f1f3; }
+.loading { font-size: 25rpx; padding: 16rpx 0; }
+.loading.err { color: var(--fail); }
+.doc-h { font-size: 26rpx; font-weight: 700; color: var(--brand-d); margin: 22rpx 0 10rpx; padding-left: 14rpx; border-left: 5rpx solid var(--brand); }
+.doc-p { font-size: 25rpx; line-height: 1.85; color: #333; }
+.doc-q { font-size: 24rpx; line-height: 1.8; color: var(--muted); }

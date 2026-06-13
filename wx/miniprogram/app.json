@@ -5,6 +5,7 @@
     "pages/result/result",
     "pages/history/history",
     "pages/me/me",
+    "pages/standards/standards",
     "pages/privacy/privacy"
   ],
   "window": {

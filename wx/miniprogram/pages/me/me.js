@@ -41,6 +41,10 @@ Page({
     wx.navigateTo({ url: '/pages/privacy/privacy' });
   },
 
+  onOpenStandards() {
+    wx.navigateTo({ url: '/pages/standards/standards' });
+  },
+
   onOpenHistory() {
     wx.navigateTo({ url: '/pages/history/history' });
   },
