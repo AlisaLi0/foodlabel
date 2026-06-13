@@ -35,3 +35,22 @@
 
 .tips-title { font-weight: 600; margin-bottom: 12rpx; }
 .tips-line { line-height: 1.7; font-size: 24rpx; }
+
+/* 隐私授权弹窗 */
+.privacy-mask {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.privacy-box {
+  width: 600rpx; background: #fff; border-radius: 20rpx; padding: 40rpx 36rpx 28rpx;
+}
+.privacy-title { font-size: 32rpx; font-weight: 700; text-align: center; }
+.privacy-body { margin-top: 24rpx; font-size: 27rpx; line-height: 1.7; color: #333; }
+.privacy-link { color: var(--brand); }
+.privacy-actions { margin-top: 36rpx; display: flex; gap: 20rpx; }
+.privacy-btn {
+  flex: 1; margin: 0; font-size: 28rpx; border-radius: 999rpx; line-height: 2.6;
+}
+.privacy-btn.reject { background: #f2f3f5; color: #666; }
+.privacy-btn.agree { background: var(--brand); color: #fff; }
+.privacy-btn::after { border: none; }
