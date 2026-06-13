@@ -24,7 +24,7 @@ import uuid
 from collections import deque
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 # request.form() 返回 starlette 的 UploadFile；fastapi.UploadFile 是其子类，
@@ -48,6 +48,10 @@ MAX_IMAGES = int(os.getenv("FOODLABEL_MAX_IMAGES", str(core.DEFAULT_MAX_IMAGES))
 MAX_IMAGE_BYTES = int(os.getenv("FOODLABEL_MAX_IMAGE_BYTES", str(core.DEFAULT_MAX_BYTES)))
 # 每 IP 每小时检查次数上限，保护上游网关配额。0 关闭。
 CHECK_MAX_PER_HOUR = int(os.getenv("FOODLABEL_MAX_PER_HOUR", "60"))
+# 小程序图片落盘目录（公网可访问，用于微信 media_check_async 的 media_url）。挂在 web 静态目录下。
+UPLOAD_DIR = os.getenv("FOODLABEL_UPLOAD_DIR", os.path.join(WEB_DIR, "uploads"))
+# 落盘图片的公网基址（拼 media_url）。
+PUBLIC_BASE = os.getenv("FOODLABEL_PUBLIC_BASE", "https://docs-tools.online/biaoqianshibie").rstrip("/")
 
 app = FastAPI(title="biaoqianshibie", docs_url=None, redoc_url=None)
 
@@ -284,6 +288,59 @@ async def wx_health() -> dict:
     return {"ok": True, "wx_enabled": wxauth.wx_enabled()}
 
 
+async def _submit_images_seccheck(items: list, openid: str) -> None:
+    """把上传项里的图片落盘成公网 URL 并异步送检微信内容安全。fail-open，绝不抛。"""
+    if not seccheck.enabled():
+        return
+    try:
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        for raw, ctype, fname in items:
+            ct = (ctype or "").lower()
+            name = (fname or "").lower()
+            is_image = ct.startswith("image/") or name.endswith(
+                (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+            )
+            if not is_image or not raw:
+                continue
+            ext = "jpg"
+            if "png" in ct or name.endswith(".png"):
+                ext = "png"
+            elif "webp" in ct or name.endswith(".webp"):
+                ext = "webp"
+            key = f"{uuid.uuid4().hex}.{ext}"
+            path = os.path.join(UPLOAD_DIR, key)
+            with open(path, "wb") as f:
+                f.write(raw)
+            media_url = f"{PUBLIC_BASE}/uploads/{key}"
+            await seccheck.submit_image(media_url, openid)
+    except Exception:  # noqa: BLE001 — 内容安全是附加防线，落盘/送检异常不阻断主流程
+        pass
+
+
+@app.api_route("/api/wx/sec-callback", methods=["GET", "POST"])
+async def wx_sec_callback(request: Request):
+    """微信消息推送回调：接收 media_check_async 的图片审核异步结果。
+
+    GET：服务器配置时的 URL 校验（回显 echostr）。
+    POST：审核结果事件，违规图片记入 seccheck.flagged_urls。
+    """
+    q = request.query_params
+    if not seccheck.verify_signature(
+        seccheck.CALLBACK_TOKEN, q.get("signature", ""), q.get("timestamp", ""), q.get("nonce", "")
+    ):
+        return PlainTextResponse("invalid signature", status_code=403)
+    if request.method == "GET":
+        return PlainTextResponse(q.get("echostr", ""))
+    # POST：明文模式下为 JSON 事件体。
+    try:
+        data = await request.json()
+    except Exception:  # noqa: BLE001
+        data = {}
+    seccheck.handle_callback(data)
+    return PlainTextResponse("success")
+
+
+
 @app.post("/api/wx/login")
 async def wx_login(request: Request) -> JSONResponse:
     if not wxauth.wx_enabled():
@@ -349,6 +406,10 @@ async def wx_check(request: Request) -> JSONResponse:
         allowed, _label = await seccheck.check_text(doc_text, openid)
         if not allowed:
             return JSONResponse({"error": "上传内容包含违规信息，已拒绝。"}, status_code=400)
+
+    # 内容安全：用户上传的图片落盘成公网 URL 后异步送检（media_check_async）。
+    # 异步——不阻塞本次检查；违规结果由微信回调 /api/wx/sec-callback 下发。
+    await _submit_images_seccheck(items, openid)
 
     balance = wxauth.deduct(openid, wxauth.COST_PER_CHECK, "check")
     if balance is None:

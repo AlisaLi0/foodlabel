@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 
@@ -26,9 +27,18 @@ from . import wxauth
 
 _API = "https://api.weixin.qq.com"
 _ENABLE = os.getenv("FOODLABEL_SECCHECK_ENABLE", "1") != "0"
+# 消息推送（接收 media_check_async 异步结果）配置：在小程序后台「开发设置→消息推送」填同样的 Token。
+CALLBACK_TOKEN = os.getenv("FOODLABEL_WX_CALLBACK_TOKEN", "")
+# 公网基址，用于把落盘图片拼成微信可访问的 media_url（默认线上站点子路径）。
+PUBLIC_BASE = os.getenv("FOODLABEL_PUBLIC_BASE", "https://docs-tools.online/biaoqianshibie").rstrip("/")
 
 # access_token 进程内缓存：{token, exp}。stable_token 有效期 7200s，提前 5min 过期刷新。
 _token_cache: dict = {"token": "", "exp": 0.0}
+
+# 异步图片送检的 trace_id → {openid, ts} 映射，回调时据此定位用户/任务（进程内，TTL 1h）。
+_traces: dict[str, dict] = {}
+# 被判违规的图片公网 url 集合（回调写入），供任务侧/人工侧查询。进程内即可。
+flagged_urls: set[str] = set()
 
 
 def enabled() -> bool:
@@ -94,9 +104,8 @@ async def check_text(content: str, openid: str, scene: int = 2) -> tuple[bool, s
 async def submit_image(media_url: str, openid: str, scene: int = 2) -> tuple[bool, str]:
     """图片内容安全（异步提交送检）。返回 (submitted, trace_id_or_reason)。
 
-    media_check_async 仅"提交"是同步的；违规结果由微信消息推送异步回调下发。
-    本函数只负责把图片送检（满足"已接入内容安全"声明）；未配消息推送时不接收回调，
-    送检本身仍有效（微信侧仍会审核并可在后台违规记录体现）。fail-open：异常不阻断。
+    media_check_async 仅"提交"是同步的；违规结果由微信消息推送异步回调下发（见 handle_callback）。
+    送检成功后记录 trace_id→openid 映射，供回调定位。fail-open：异常不阻断业务。
     """
     if not enabled() or not media_url:
         return True, "disabled"
@@ -113,4 +122,43 @@ async def submit_image(media_url: str, openid: str, scene: int = 2) -> tuple[boo
         return True, "error"
     if j.get("errcode", 0) != 0:
         return True, f"errcode:{j.get('errcode')}"
-    return True, (j.get("trace_id") or "submitted")
+    trace_id = j.get("trace_id") or ""
+    if trace_id:
+        _gc_traces()
+        _traces[trace_id] = {"openid": openid, "url": media_url, "ts": time.time()}
+    return True, (trace_id or "submitted")
+
+
+def _gc_traces() -> None:
+    """清理过期 trace 映射（TTL 1h）。"""
+    now = time.time()
+    for tid in [t for t, v in _traces.items() if now - v.get("ts", 0) > 3600]:
+        _traces.pop(tid, None)
+
+
+def verify_signature(token: str, signature: str, timestamp: str, nonce: str) -> bool:
+    """微信消息推送 URL 校验：sha1(sort(token,timestamp,nonce)) == signature。"""
+    arr = sorted([token or "", timestamp or "", nonce or ""])
+    sha = hashlib.sha1("".join(arr).encode("utf-8")).hexdigest()
+    return sha == (signature or "")
+
+
+def handle_callback(data: dict) -> None:
+    """处理 media_check_async 异步回调结果。违规图片记入 flagged_urls，并按 openid 标记。
+
+    微信推送的事件结构（明文模式）大致：
+      {"Event":"wxa_media_check","trace_id":...,"result":{"suggest":"risky|pass",...},...}
+    suggest=risky 视为违规。fail-safe：解析异常忽略，不抛。
+    """
+    try:
+        trace_id = data.get("trace_id") or ""
+        result = data.get("result") or {}
+        suggest = result.get("suggest") or data.get("suggest")
+        info = _traces.pop(trace_id, None)
+        if suggest == "risky":
+            url = (info or {}).get("url")
+            if url:
+                flagged_urls.add(url)
+    except Exception:  # noqa: BLE001 — 回调容错，绝不抛
+        pass
+
