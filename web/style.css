@@ -25,9 +25,6 @@ body {
   background: var(--bg);
   color: var(--ink);
   line-height: 1.6;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 .topbar {
   background: var(--brand);
@@ -44,11 +41,12 @@ body {
 .topbar .topnav:hover { background: rgba(255,255,255,.15); }
 main { max-width: 880px; margin: 0 auto; padding: 20px 16px 60px; }
 
-/* body 为 flex 列布局：主内容区撑开、页脚贴底 */
-body > main, body > .layout, body > .legal { flex: 1 0 auto; width: 100%; }
+/* body 为 flex 列布局：主内容区按自然高度排列，页脚跟在内容之后。
+   不强行把容器拉满视口高度（否则内容少时中间会留大片空白）。 */
+body > main, body > .layout, body > .legal { width: 100%; }
 
 /* 左侧边栏 + 主内容布局 */
-.layout { max-width: 1200px; margin: 0 auto; display: flex; gap: 18px; padding: 20px 16px 60px; align-items: flex-start; }
+.layout { max-width: 1200px; margin: 0 auto; display: flex; gap: 18px; padding: 20px 16px 60px; align-items: flex-start; box-sizing: border-box; }
 .layout .content { flex: 1; min-width: 0; }
 .sidebar {
   width: 260px; flex: none; position: sticky; top: 16px;
@@ -316,7 +314,6 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 
 /* 全站页脚 */
 .site-footer {
-  margin-top: auto;
   width: 100%;
   padding: 24px 16px 30px;
   text-align: center; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line);
