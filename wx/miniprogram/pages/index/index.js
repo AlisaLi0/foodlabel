@@ -39,9 +39,11 @@ Page({
     try {
       const info = (typeof wx.getDeviceInfo === 'function' ? wx.getDeviceInfo() : wx.getSystemInfoSync()) || {};
       const platform = String(info.platform || '').toLowerCase();
-      this._isHarmony = platform === 'ohos' || platform.indexOf('harmony') !== -1;
+      // 只有明确的 iOS/Android 用新版 chooseMedia；其余一律（other/ohos/devtools/未知）
+      // 走旧版 chooseImage（兼容性更好，实测 other 平台 chooseMedia 会裸 fail）。
+      this._useNewPicker = (platform === 'android' || platform === 'ios');
     } catch (e) {
-      this._isHarmony = false;
+      this._useNewPicker = false;
     }
     // 官方隐私方案（基础库 2.32.3+）：监听到隐私接口（如 chooseMedia）被调用且用户未同意时，
     // 弹出自定义授权弹窗；用户点「同意」后 resolve 放行，接口继续执行。低版本无此 API 时跳过。
@@ -194,21 +196,8 @@ Page({
     };
     const pick = (isRetry) => {
       const retry = () => pick(true);
-      if (this._isHarmony) {
-        // 鸿蒙：旧版 chooseImage 兼容性更好
-        wx.chooseImage({
-          count: remain,
-          sizeType: ['compressed', 'original'],
-          sourceType: ['album', 'camera'],
-          success: (res) => {
-            const paths = res.tempFilePaths || [];
-            const files = res.tempFiles || [];
-            merge(paths.map((p, i) => ({ path: p, size: files[i] && files[i].size })));
-          },
-          fail: (err) => onFail(err, isRetry, retry),
-        });
-      } else {
-        // 其它平台：功能更全的新版 chooseMedia
+      if (this._useNewPicker) {
+        // 仅 iOS/Android：功能更全的新版 chooseMedia
         wx.chooseMedia({
           count: remain,
           mediaType: ['image'],
@@ -217,6 +206,19 @@ Page({
           success: (res) => {
             const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
             merge(files.map((f) => ({ path: f.tempFilePath, size: f.size })));
+          },
+          fail: (err) => onFail(err, isRetry, retry),
+        });
+      } else {
+        // other / 鸿蒙 / 未知：旧版 chooseImage 兼容性更好
+        wx.chooseImage({
+          count: remain,
+          sizeType: ['compressed', 'original'],
+          sourceType: ['album', 'camera'],
+          success: (res) => {
+            const paths = res.tempFilePaths || [];
+            const files = res.tempFiles || [];
+            merge(paths.map((p, i) => ({ path: p, size: files[i] && files[i].size })));
           },
           fail: (err) => onFail(err, isRetry, retry),
         });
