@@ -34,17 +34,8 @@ Page({
   },
 
   onLoad() {
-    // 平台检测：纯血鸿蒙(platform=ohos)上 wx.chooseMedia 存在裸 fail 兼容问题，
-    // 走旧版 wx.chooseImage；其它平台用功能更全的 chooseMedia。
-    try {
-      const info = (typeof wx.getDeviceInfo === 'function' ? wx.getDeviceInfo() : wx.getSystemInfoSync()) || {};
-      const platform = String(info.platform || '').toLowerCase();
-      // 只有明确的 iOS/Android 用新版 chooseMedia；其余一律（other/ohos/devtools/未知）
-      // 走旧版 chooseImage（兼容性更好，实测 other 平台 chooseMedia 会裸 fail）。
-      this._useNewPicker = (platform === 'android' || platform === 'ios');
-    } catch (e) {
-      this._useNewPicker = false;
-    }
+    // 选图统一用 wx.chooseMedia：官方文档明确它在 iOS/Android/鸿蒙/Windows/Mac 全支持，
+    // 且旧版 wx.chooseImage 自基础库 2.21.0 起已停止维护。无需按平台分流。
     // 官方隐私方案（基础库 2.32.3+）：监听到隐私接口（如 chooseMedia）被调用且用户未同意时，
     // 弹出自定义授权弹窗；用户点「同意」后 resolve 放行，接口继续执行。低版本无此 API 时跳过。
     if (typeof wx.onNeedPrivacyAuthorization === 'function') {
@@ -186,43 +177,28 @@ Page({
       this.setData({ tempFilePaths: list, statusText: '' });
       this._recompute();
     };
-    // 实测：已有图后再加时，首次调用常裸 fail，重试一次就成功（原生选择面板
-    // 未及时就绪）。所以 fail 后自动重试一次，用户无感知；重试仍败才提示。
+    // 实测：已有图后再加时，首次调用可能裸 fail（原生选择面板未及时就绪），
+    // 重试一次就成功。所以 fail 后自动重试一次，用户无感知；重试仍败才提示。
     const onFail = (err, isRetry, retry) => {
       const msg = (err && err.errMsg) || '';
       if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
       if (!isRetry) { setTimeout(retry, 350); return; } // 首次裸 fail，自动重试
       wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
     };
+    // 全平台统一用 chooseMedia（官方现行推荐，iOS/Android/鸿蒙/Windows/Mac 均支持）
     const pick = (isRetry) => {
       const retry = () => pick(true);
-      if (this._useNewPicker) {
-        // 仅 iOS/Android：功能更全的新版 chooseMedia
-        wx.chooseMedia({
-          count: remain,
-          mediaType: ['image'],
-          sourceType: ['album', 'camera'],
-          sizeType: ['compressed', 'original'],
-          success: (res) => {
-            const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
-            merge(files.map((f) => ({ path: f.tempFilePath, size: f.size })));
-          },
-          fail: (err) => onFail(err, isRetry, retry),
-        });
-      } else {
-        // other / 鸿蒙 / 未知：旧版 chooseImage 兼容性更好
-        wx.chooseImage({
-          count: remain,
-          sizeType: ['compressed', 'original'],
-          sourceType: ['album', 'camera'],
-          success: (res) => {
-            const paths = res.tempFilePaths || [];
-            const files = res.tempFiles || [];
-            merge(paths.map((p, i) => ({ path: p, size: files[i] && files[i].size })));
-          },
-          fail: (err) => onFail(err, isRetry, retry),
-        });
-      }
+      wx.chooseMedia({
+        count: remain,
+        mediaType: ['image'],
+        sourceType: ['album', 'camera'],
+        sizeType: ['compressed', 'original'],
+        success: (res) => {
+          const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
+          merge(files.map((f) => ({ path: f.tempFilePath, size: f.size })));
+        },
+        fail: (err) => onFail(err, isRetry, retry),
+      });
     };
     pick(false);
   },
