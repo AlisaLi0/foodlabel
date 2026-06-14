@@ -177,8 +177,28 @@ Page({
         this._recompute();
       },
       fail: (err) => {
-        const msg = (err && err.errMsg) || '';
+        const msg = ((err && err.errMsg) || '').toLowerCase();
         if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
+        // 隐私授权未通过：用户在隐私弹窗点了"不同意"，或指引更新后需重新授权
+        if (msg.indexOf('privacy') !== -1) {
+          wx.showModal({
+            title: '需要隐私授权',
+            content: '选择图片前需先同意《用户隐私保护指引》。请重新操作并在弹窗中点击"同意"。',
+            showCancel: false,
+            confirmText: '知道了',
+          });
+          return;
+        }
+        // 系统相册/相机权限被拒：引导去系统设置打开
+        if (msg.indexOf('auth deny') !== -1 || msg.indexOf('auth denied') !== -1 || msg.indexOf('authorize') !== -1 || msg.indexOf('permission') !== -1) {
+          wx.showModal({
+            title: '无法访问相册',
+            content: '请在系统设置中允许微信访问相册/相机后重试。',
+            confirmText: '去设置', cancelText: '取消',
+            success: (r) => { if (r.confirm) wx.openSetting(); },
+          });
+          return;
+        }
         wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
       },
     });
