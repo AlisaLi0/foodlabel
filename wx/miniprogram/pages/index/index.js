@@ -34,6 +34,15 @@ Page({
   },
 
   onLoad() {
+    // 平台检测：纯血鸿蒙(platform=ohos)上 wx.chooseMedia 存在裸 fail 兼容问题，
+    // 走旧版 wx.chooseImage；其它平台用功能更全的 chooseMedia。
+    try {
+      const info = (typeof wx.getDeviceInfo === 'function' ? wx.getDeviceInfo() : wx.getSystemInfoSync()) || {};
+      const platform = String(info.platform || '').toLowerCase();
+      this._isHarmony = platform === 'ohos' || platform.indexOf('harmony') !== -1;
+    } catch (e) {
+      this._isHarmony = false;
+    }
     // 官方隐私方案（基础库 2.32.3+）：监听到隐私接口（如 chooseMedia）被调用且用户未同意时，
     // 弹出自定义授权弹窗；用户点「同意」后 resolve 放行，接口继续执行。低版本无此 API 时跳过。
     if (typeof wx.onNeedPrivacyAuthorization === 'function') {
@@ -161,35 +170,52 @@ Page({
       wx.showToast({ title: '最多 3 张', icon: 'none' });
       return;
     }
-    // 直接用旧版 chooseImage 作为唯一选择器：鸿蒙等机型上 chooseMedia 会裸 fail，
-    // 且「fail 里再链式调 chooseImage」会和未销毁的原生面板冲突（表现为第一次失败、
-    // 第二次才成功）。单次干净调用，避免冲突。
-    wx.chooseImage({
-      count: remain,
-      sizeType: ['compressed', 'original'],
-      sourceType: ['album', 'camera'],
-      success: (res) => {
-        const paths = res.tempFilePaths || [];
-        const files = res.tempFiles || [];
-        const kept = [];
-        let skipped = false;
-        paths.forEach((p, i) => {
-          const size = files[i] && files[i].size;
-          if (size && size > 8 * 1024 * 1024) { skipped = true; return; }
-          kept.push(p);
-        });
-        if (skipped) wx.showToast({ title: '已跳过过大图片（>8MB）', icon: 'none' });
-        if (!kept.length) return;
-        const list = this.data.tempFilePaths.concat(kept).slice(0, 3);
-        this.setData({ tempFilePaths: list, statusText: '' });
-        this._recompute();
-      },
-      fail: (err) => {
-        const msg = (err && err.errMsg) || '';
-        if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-        wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
-      },
-    });
+    // 把 [{path,size}] 过滤超大图后并入已选列表（最多 3 张）
+    const merge = (items) => {
+      const kept = [];
+      let skipped = false;
+      items.forEach((it) => {
+        if (it.size && it.size > 8 * 1024 * 1024) { skipped = true; return; }
+        kept.push(it.path);
+      });
+      if (skipped) wx.showToast({ title: '已跳过过大图片（>8MB）', icon: 'none' });
+      if (!kept.length) return;
+      const list = this.data.tempFilePaths.concat(kept).slice(0, 3);
+      this.setData({ tempFilePaths: list, statusText: '' });
+      this._recompute();
+    };
+    const onFail = (err) => {
+      const msg = (err && err.errMsg) || '';
+      if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
+      wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
+    };
+    if (this._isHarmony) {
+      // 鸿蒙：旧版 chooseImage 兼容性更好
+      wx.chooseImage({
+        count: remain,
+        sizeType: ['compressed', 'original'],
+        sourceType: ['album', 'camera'],
+        success: (res) => {
+          const paths = res.tempFilePaths || [];
+          const files = res.tempFiles || [];
+          merge(paths.map((p, i) => ({ path: p, size: files[i] && files[i].size })));
+        },
+        fail: onFail,
+      });
+    } else {
+      // 其它平台：功能更全的 chooseMedia
+      wx.chooseMedia({
+        count: remain,
+        mediaType: ['image'],
+        sourceType: ['album', 'camera'],
+        sizeType: ['compressed', 'original'],
+        success: (res) => {
+          const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
+          merge(files.map((f) => ({ path: f.tempFilePath, size: f.size })));
+        },
+        fail: onFail,
+      });
+    }
   },
 
   onRemoveImage(e) {
