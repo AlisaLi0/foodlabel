@@ -161,31 +161,11 @@ Page({
       wx.showToast({ title: '最多 3 张', icon: 'none' });
       return;
     }
-    // 先把隐私授权单独走完，再开相册：避免 chooseMedia 内部等待隐私授权而抛 uncaught timeout。
-    // requirePrivacyAuthorize 会触发 onNeedPrivacyAuthorization（弹我们自定义弹窗）；
-    // 已授权时直接 success；低版本无此 API 时跳过，直接选图。
-    if (typeof wx.requirePrivacyAuthorize === 'function') {
-      wx.requirePrivacyAuthorize({
-        success: () => this._openMediaPicker(remain),
-        fail: () => {
-          wx.showModal({
-            title: '需要隐私授权',
-            content: '选择图片前需先同意《用户隐私保护指引》。请重新操作并在弹窗中点击"同意"。',
-            showCancel: false, confirmText: '知道了',
-          });
-        },
-      });
-    } else {
-      this._openMediaPicker(remain);
-    }
-  },
-
-  _openMediaPicker(remain) {
     wx.chooseMedia({
       count: remain,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
-      sizeType: ['compressed', 'original'],
+      sizeType: ['original'],
       success: (res) => {
         const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
         if (!files.length) return;
@@ -197,43 +177,9 @@ Page({
         this._recompute();
       },
       fail: (err) => {
-        const msg = ((err && err.errMsg) || '').toLowerCase();
+        const msg = (err && err.errMsg) || '';
         if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-        // 隐私授权未通过：用户在隐私弹窗点了"不同意"，或指引更新后需重新授权
-        if (msg.indexOf('privacy') !== -1) {
-          wx.showModal({
-            title: '需要隐私授权',
-            content: '选择图片前需先同意《用户隐私保护指引》。请重新操作并在弹窗中点击"同意"。',
-            showCancel: false,
-            confirmText: '知道了',
-          });
-          return;
-        }
-        // 系统相册/相机权限被拒：引导去系统设置打开
-        if (msg.indexOf('auth deny') !== -1 || msg.indexOf('auth denied') !== -1 || msg.indexOf('authorize') !== -1 || msg.indexOf('permission') !== -1) {
-          wx.showModal({
-            title: '无法访问相册',
-            content: '请在系统设置中允许微信访问相册/相机后重试。',
-            confirmText: '去设置', cancelText: '取消',
-            success: (r) => { if (r.confirm) wx.openSetting(); },
-          });
-          return;
-        }
-        // 选图超时（多见于开发者工具模拟器，真机一般正常）
-        if (msg.indexOf('timeout') !== -1) {
-          wx.showModal({
-            title: '选图超时',
-            content: '相册响应超时，请重试。若在开发者工具中频繁出现，请用真机预览测试。',
-            showCancel: false, confirmText: '知道了',
-          });
-          return;
-        }
-        // 其它未知失败：把真实 errMsg 显示出来，便于定位（不再笼统报"请重试"）
-        wx.showModal({
-          title: '选图失败',
-          content: (err && err.errMsg) || '未知错误',
-          showCancel: false, confirmText: '知道了',
-        });
+        wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
       },
     });
   },
