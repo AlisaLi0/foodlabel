@@ -69,20 +69,3 @@
     <view class="muted tips-line">· 相关标准 2027-03-16 正式实施。</view>
   </view>
 </view>
-
-<!-- 隐私授权弹窗：当调用 chooseMedia 等隐私接口而用户尚未同意时由 onNeedPrivacyAuthorization 触发 -->
-<view wx:if="{{showPrivacy}}" class="privacy-mask">
-  <view class="privacy-box">
-    <view class="privacy-title">隐私保护提示</view>
-    <view class="privacy-body">
-      为了帮你识读并检查食品标签，需要使用你选择或拍摄的图片。请阅读并同意
-      <text class="privacy-link" bindtap="onOpenPrivacyContract">{{privacyContractName || '《用户隐私保护指引》'}}</text>
-      后继续。
-    </view>
-    <view class="privacy-actions">
-      <button class="privacy-btn reject" bindtap="onDisagreePrivacy">不同意</button>
-      <button class="privacy-btn agree" open-type="agreePrivacyAuthorization"
-              bindagreeprivacyauthorization="onAgreePrivacy">同意</button>
-    </view>
-  </view>
-</view>

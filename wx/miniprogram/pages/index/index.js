@@ -28,31 +28,12 @@ Page({
     stepLabels: STEP_LABELS,
     statusText: '',
     canSubmit: false,
-    showPrivacy: false,
-    privacyContractName: '',
     history: [],
   },
 
   onLoad() {
     // 选图统一用 wx.chooseMedia：官方文档明确它在 iOS/Android/鸿蒙/Windows/Mac 全支持，
-    // 且旧版 wx.chooseImage 自基础库 2.21.0 起已停止维护。无需按平台分流。
-    // 官方隐私方案（基础库 2.32.3+）：监听到隐私接口（如 chooseMedia）被调用且用户未同意时，
-    // 弹出自定义授权弹窗；用户点「同意」后 resolve 放行，接口继续执行。低版本无此 API 时跳过。
-    if (typeof wx.onNeedPrivacyAuthorization === 'function') {
-      wx.onNeedPrivacyAuthorization((resolve) => {
-        this._privacyResolve = resolve;
-        this.setData({ showPrivacy: true });
-      });
-    }
-    if (typeof wx.getPrivacySetting === 'function') {
-      wx.getPrivacySetting({
-        success: (res) => {
-          if (res && res.privacyContractName) {
-            this.setData({ privacyContractName: res.privacyContractName });
-          }
-        },
-      });
-    }
+    // 且旧版 wx.chooseImage 自基础库 2.21.0 起已停止维护。隐私授权走微信默认流程（系统自带弹窗）。
   },
 
   onShow() {
@@ -130,31 +111,6 @@ Page({
   _recompute() {
     const can = this.data.tempFilePaths.length > 0 && !this.data.submitting;
     if (can !== this.data.canSubmit) this.setData({ canSubmit: can });
-  },
-
-  // 打开后台配置的《用户隐私保护指引》
-  onOpenPrivacyContract() {
-    if (typeof wx.openPrivacyContract === 'function') {
-      wx.openPrivacyContract({ fail: () => wx.showToast({ title: '打开失败', icon: 'none' }) });
-    }
-  },
-
-  // 用户点「同意」：告知平台已同意，被拦截的隐私接口（chooseMedia）会自动继续执行
-  onAgreePrivacy() {
-    this.setData({ showPrivacy: false });
-    if (this._privacyResolve) {
-      this._privacyResolve({ event: 'agree' });
-      this._privacyResolve = null;
-    }
-  },
-
-  // 用户点「不同意」：关闭弹窗并告知平台拒绝，本次选图取消
-  onDisagreePrivacy() {
-    this.setData({ showPrivacy: false });
-    if (this._privacyResolve) {
-      this._privacyResolve({ event: 'disagree' });
-      this._privacyResolve = null;
-    }
   },
 
   onChooseImage() {
