@@ -119,15 +119,26 @@ Page({
       wx.showToast({ title: '最多 3 张', icon: 'none' });
       return;
     }
-    // 读图逻辑与 recastly 完全一致：chooseMedia 仅 success 处理，不写 fail、不自动重试。
+    // 华为/部分机型上微信内置「拍照/相册」二合一面板的相册分支会原生层裸 fail（拍照正常）。
+    // 改成自己弹选择，相册与拍照各用单一 sourceType 分开调，绕开混合面板。
+    wx.showActionSheet({
+      itemList: ['从相册选择', '拍照'],
+      success: (r) => {
+        const source = r.tapIndex === 0 ? 'album' : 'camera';
+        this._doChooseMedia(remain, source);
+      },
+    });
+  },
+
+  _doChooseMedia(remain, source) {
     wx.chooseMedia({
-      count: remain,
+      count: source === 'camera' ? 1 : remain,
       mediaType: ['image'],
-      sourceType: ['album', 'camera'],
+      sourceType: [source],
       sizeType: ['compressed', 'original'],
       success: (res) => {
         const raw = res.tempFiles || [];
-        console.log('chooseMedia success 文件数=', raw.length, '大小=', raw.map((f) => f && f.size));
+        console.log('chooseMedia[' + source + '] success 文件数=', raw.length, '大小=', raw.map((f) => f && f.size));
         const files = raw.filter((f) => f && f.tempFilePath);
         if (!files.length) { wx.showToast({ title: '未取到图片，请重试', icon: 'none' }); return; }
         const over = files.find((f) => f.size > 8 * 1024 * 1024);
@@ -137,7 +148,12 @@ Page({
         this.setData({ tempFilePaths: paths, statusText: '' });
         this._recompute();
       },
-      fail: (err) => { console.error('chooseMedia fail errno=', err && err.errno, err && err.errMsg); },
+      fail: (err) => {
+        const msg = (err && err.errMsg) || '';
+        console.error('chooseMedia[' + source + '] fail errno=', err && err.errno, msg);
+        if (msg.indexOf('cancel') !== -1) return;
+        wx.showToast({ title: (source === 'album' ? '相册' : '拍照') + '打开失败，请重试', icon: 'none' });
+      },
     });
   },
 
