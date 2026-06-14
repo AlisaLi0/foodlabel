@@ -187,7 +187,12 @@ Page({
     const onFail = (err) => {
       const msg = (err && err.errMsg) || '';
       if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-      wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
+      console.error('选图失败:', JSON.stringify(err));
+      wx.showModal({
+        title: '选图失败（真实错误）',
+        content: (msg || '未知错误') + '\n平台:' + (this._isHarmony ? 'ohos' : 'other'),
+        showCancel: false, confirmText: '知道了',
+      });
     };
     if (this._isHarmony) {
       // 鸿蒙：旧版 chooseImage 兼容性更好
