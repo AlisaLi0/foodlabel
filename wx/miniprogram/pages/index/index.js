@@ -119,44 +119,23 @@ Page({
       wx.showToast({ title: '最多 3 张', icon: 'none' });
       return;
     }
-    // 把 [{path,size}] 过滤超大图后并入已选列表（最多 3 张）
-    const merge = (items) => {
-      const kept = [];
-      let skipped = false;
-      items.forEach((it) => {
-        if (it.size && it.size > 8 * 1024 * 1024) { skipped = true; return; }
-        kept.push(it.path);
-      });
-      if (skipped) wx.showToast({ title: '已跳过过大图片（>8MB）', icon: 'none' });
-      if (!kept.length) return;
-      const list = this.data.tempFilePaths.concat(kept).slice(0, 3);
-      this.setData({ tempFilePaths: list, statusText: '' });
-      this._recompute();
-    };
-    // 实测：已有图后再加时，首次调用可能裸 fail（原生选择面板未及时就绪），
-    // 重试一次就成功。所以 fail 后自动重试一次，用户无感知；重试仍败才提示。
-    const onFail = (err, isRetry, retry) => {
-      const msg = (err && err.errMsg) || '';
-      if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-      if (!isRetry) { setTimeout(retry, 350); return; } // 首次裸 fail，自动重试
-      wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
-    };
-    // 全平台统一用 chooseMedia（官方现行推荐，iOS/Android/鸿蒙/Windows/Mac 均支持）
-    const pick = (isRetry) => {
-      const retry = () => pick(true);
-      wx.chooseMedia({
-        count: remain,
-        mediaType: ['image'],
-        sourceType: ['album', 'camera'],
-        sizeType: ['compressed', 'original'],
-        success: (res) => {
-          const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
-          merge(files.map((f) => ({ path: f.tempFilePath, size: f.size })));
-        },
-        fail: (err) => onFail(err, isRetry, retry),
-      });
-    };
-    pick(false);
+    // 读图逻辑与 recastly 完全一致：chooseMedia 仅 success 处理，不写 fail、不自动重试。
+    wx.chooseMedia({
+      count: remain,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      sizeType: ['original'],
+      success: (res) => {
+        const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
+        if (!files.length) return;
+        const over = files.find((f) => f.size > 8 * 1024 * 1024);
+        if (over) wx.showToast({ title: '已跳过过大图片（>8MB）', icon: 'none' });
+        const add = files.filter((f) => f.size <= 8 * 1024 * 1024).map((f) => f.tempFilePath);
+        const paths = this.data.tempFilePaths.concat(add).slice(0, 3);
+        this.setData({ tempFilePaths: paths, statusText: '' });
+        this._recompute();
+      },
+    });
   },
 
   onRemoveImage(e) {
