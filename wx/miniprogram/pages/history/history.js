@@ -5,6 +5,7 @@ const VERDICT_TEXT = {
   issues: '需复核',
   non_compliant: '不符合',
   not_a_label: '非标签',
+  failed: '失败',
 };
 
 Page({
@@ -23,9 +24,10 @@ Page({
       const items = (res.items || []).map((x) => ({
         id: x.id,
         thumb: x.thumb || '',
-        food_name: x.food_name || '未识读到名称',
+        food_name: x.verdict === 'failed' ? '识别失败' : (x.food_name || '未识读到名称'),
         verdict: x.verdict,
         verdictText: VERDICT_TEXT[x.verdict] || '已检查',
+        failed: x.verdict === 'failed',
         score: x.score,
         timeText: this._fmtTime(x.ts),
       }));
@@ -44,7 +46,19 @@ Page({
 
   onOpen(e) {
     const id = e.currentTarget.dataset.id;
-    if (id) wx.navigateTo({ url: '/pages/result/result?hid=' + id });
+    const failed = e.currentTarget.dataset.failed;
+    if (!id) return;
+    if (failed) {
+      // 失败记录无可用结果：提示去首页重新上传重试
+      wx.showModal({
+        title: '该次识别失败',
+        content: '这次检查未成功（未扣次数）。可回首页重新上传重试。',
+        confirmText: '去首页', cancelText: '知道了',
+        success: (r) => { if (r.confirm) wx.switchTab({ url: '/pages/index/index' }); },
+      });
+      return;
+    }
+    wx.navigateTo({ url: '/pages/result/result?hid=' + id });
   },
 
   onDelete(e) {

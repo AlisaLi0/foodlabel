@@ -276,13 +276,27 @@ import uuid as _uuid
 HISTORY_MAX = int(os.getenv("FOODLABEL_WX_HISTORY_MAX", "50"))
 
 
-def add_history(openid: str, images: list[str], result: dict) -> str:
-    """新增一条识别历史，返回 id。images 为公网图片 URL 列表。"""
+def add_history(openid: str, images: list[str], result: dict | None, error: str | None = None) -> str:
+    """新增一条识别历史，返回 id。images 为公网图片 URL 列表。
+
+    error 非空 → 记录一条**失败**历史（verdict='failed'，result 内含 failed/error），
+    供「失败也要记录历史」；失败条目不影响积分（扣费在调用方控制）。
+    """
     hid = _uuid.uuid4().hex
     now = int(time.time())
-    summary = (result or {}).get("summary") or {}
-    extracted = (result or {}).get("extracted") or {}
-    food_name = extracted.get("food_name") if isinstance(extracted.get("food_name"), str) else ""
+    if error:
+        verdict = "failed"
+        score = 0
+        food_name = ""
+        result_obj: dict = {"failed": True, "error": error}
+    else:
+        summary = (result or {}).get("summary") or {}
+        extracted = (result or {}).get("extracted") or {}
+        fn = extracted.get("food_name")
+        food_name = fn if isinstance(fn, str) else ""
+        verdict = summary.get("verdict") or "issues"
+        score = int(summary.get("score") or 0)
+        result_obj = result or {}
     conn = _db()
     # seq 用全表当前最大值 +1，保证严格递增（同秒内排序稳定）。
     row = conn.execute("SELECT COALESCE(MAX(seq), 0) AS m FROM history").fetchone()
@@ -292,11 +306,9 @@ def add_history(openid: str, images: list[str], result: dict) -> str:
         " VALUES (?,?,?,?,?,?,?,?,?)",
         (
             hid, seq, openid, now,
-            summary.get("verdict") or "issues",
-            int(summary.get("score") or 0),
-            food_name or "",
+            verdict, score, food_name or "",
             _json.dumps(images or [], ensure_ascii=False),
-            _json.dumps(result or {}, ensure_ascii=False),
+            _json.dumps(result_obj, ensure_ascii=False),
         ),
     )
     conn.close()

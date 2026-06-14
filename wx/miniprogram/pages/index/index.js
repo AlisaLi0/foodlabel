@@ -2,6 +2,23 @@ const api = require('../../utils/api.js');
 
 const STEP_LABELS = ['识别图片', '识读内容', '判定适用规则', '合规评价', '生成报告'];
 
+// 进行中的检查任务持久化：起检查后存 job_id+图片路径，刷新/重启后可恢复「正在处理」状态。
+const ACTIVE_JOB_KEY = 'foodlabel_active_job';
+const ACTIVE_JOB_TTL = 10 * 60 * 1000; // 10 分钟内的任务才恢复
+function saveActiveJob(jobId, paths) {
+  try { wx.setStorageSync(ACTIVE_JOB_KEY, { job_id: jobId, paths: paths || [], ts: Date.now() }); } catch (e) { /* ignore */ }
+}
+function loadActiveJob() {
+  try {
+    const j = wx.getStorageSync(ACTIVE_JOB_KEY);
+    if (j && j.job_id && (Date.now() - (j.ts || 0) < ACTIVE_JOB_TTL)) return j;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+function clearActiveJob() {
+  try { wx.removeStorageSync(ACTIVE_JOB_KEY); } catch (e) { /* ignore */ }
+}
+
 Page({
   data: {
     tempFilePaths: [],
@@ -37,6 +54,21 @@ Page({
 
   onShow() {
     this._refreshMe();
+    this._resumeJob();
+  },
+
+  // 刷新/重启/返回首页时，若有未完成的检查任务则恢复「正在处理」状态并续轮询。
+  _resumeJob() {
+    if (this.data.submitting) return; // 已在轮询，不重复
+    const job = loadActiveJob();
+    if (!job) return;
+    this._activePaths = (job.paths || []).slice(0, 3);
+    this.setData({
+      submitting: true, step: 0, canSubmit: false,
+      statusText: '正在检查（继续上次未完成的任务）…',
+      tempFilePaths: this._activePaths,
+    });
+    this._poll(job.job_id, 0);
   },
 
   _refreshMe() {
@@ -114,8 +146,12 @@ Page({
 
   onSubmit() {
     if (!this.data.canSubmit) return;
+    const paths = this.data.tempFilePaths.slice(0, 3);
+    this._activePaths = paths;
     this.setData({ submitting: true, step: 0, statusText: '上传中…', canSubmit: false });
-    api.startCheck(this.data.tempFilePaths).then((res) => {
+    api.startCheck(paths).then((res) => {
+      // 持久化任务：刷新/重启后可恢复。直到成功入库或返回失败才清除。
+      saveActiveJob(res.job_id, paths);
       this.setData({ credits: res.credits, statusText: '正在检查（约 30 秒）…' });
       this._poll(res.job_id, 0);
     }).catch((err) => {
@@ -134,17 +170,29 @@ Page({
     });
   },
 
-  // 轮询任务进度；完成后跳结果页
+  // 失败收尾：不扣费（后端已记失败历史），**保留图片**让用户直接重试。
+  _failRetry(msg) {
+    clearActiveJob();
+    const cur = this.data.tempFilePaths.length ? this.data.tempFilePaths : (this._activePaths || []);
+    this.setData({
+      submitting: false, step: 0,
+      statusText: msg || '检查失败，可重试',
+      tempFilePaths: cur.slice(0, 3),
+    });
+    this._recompute();
+    this._refreshMe();
+  },
+
+  // 轮询任务进度；完成后跳结果页，失败则保留图片可重试
   _poll(jobId, tries) {
-    if (tries > 120) { // 约 4 分钟兜底
-      this.setData({ submitting: false, statusText: '检查超时，请重试' });
-      this._recompute();
+    if (tries > 120) { // 约 4 分钟；不清除持久化任务，下次进页可继续恢复
+      this.setData({ submitting: false, statusText: '检查较慢，可稍后重新进入查看结果' });
       return;
     }
     api.pollResult(jobId).then((r) => {
       if (r.error) {
-        this.setData({ submitting: false, statusText: '' });
-        this._recompute();
+        // 后端明确失败：已记失败历史、未扣费；保留图片可重试
+        this._failRetry(r.error);
         wx.showToast({ title: r.error, icon: 'none', duration: 3000 });
         return;
       }
@@ -152,22 +200,28 @@ Page({
         this.setData({ step: r.step });
       }
       if (r.done && r.result) {
-        // 把结果暂存全局，结果页读取，避免超长 URL
+        // 成功：结果已入库。清除持久化任务，跳结果页。
+        clearActiveJob();
         getApp().globalData.lastResult = r.result;
-        getApp().globalData.lastImage = this.data.tempFilePaths[0] || ''; // 本次上传的首图，结果页顶部展示
-        // 检查完成即清空已用图：返回首页是空白选图态，「再查一张」需重新上传而非复查当前图
+        getApp().globalData.lastImage = (this.data.tempFilePaths[0] || (this._activePaths || [])[0]) || '';
+        // 检查完成即清空已用图：返回首页是空白选图态，「再查一张」需重新上传
         this.setData({ submitting: false, statusText: '', step: 0, tempFilePaths: [] });
+        this._activePaths = [];
         this._recompute();
-        this._refreshMe();
+        if (typeof r.credits === 'number') this.setData({ credits: r.credits }); else this._refreshMe();
         wx.navigateTo({ url: '/pages/result/result' });
         return;
       }
       setTimeout(() => this._poll(jobId, tries + 1), 2000);
     }).catch((err) => {
-      // 轮询偶发失败，继续重试
+      // 任务不存在/已过期（服务重启等）：当失败处理，保留图片可重试
+      if (err && err.code === 404) {
+        this._failRetry('处理已中断，请重试');
+        return;
+      }
+      // 轮询偶发网络错误：继续重试
       if (tries > 120) {
-        this.setData({ submitting: false, statusText: '网络异常，请重试' });
-        this._recompute();
+        this.setData({ submitting: false, statusText: '网络异常，可稍后重新进入查看' });
         return;
       }
       setTimeout(() => this._poll(jobId, tries + 1), 2500);

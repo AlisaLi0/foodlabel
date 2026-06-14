@@ -25,6 +25,7 @@
 .hv.v-issues { background: #fdf6e3; color: #b7791f; }
 .hv.v-non_compliant { background: #fdecea; color: #c2362f; }
 .hv.v-not_a_label { background: #eef0f2; color: #6b7280; }
+.hv.v-failed { background: #fdecea; color: #c2362f; }
 .hscore { font-size: 24rpx; color: var(--ink); }
 .htime { font-size: 22rpx; margin-top: 10rpx; }
 .hdel {

@@ -119,6 +119,7 @@ async def _run_job(job_id: str, data_urls: list[str], doc_text: str = "") -> Non
     cond: asyncio.Condition = job["cond"]
     final_result: dict | None = None
     had_error = False
+    error_msg = ""
 
     async def emit(ev: dict) -> None:
         async with cond:
@@ -132,28 +133,31 @@ async def _run_job(job_id: str, data_urls: list[str], doc_text: str = "") -> Non
                 final_result = ev.get("result")
             elif ev.get("stage") == "error":
                 had_error = True
+                error_msg = ev.get("error") or error_msg
             await emit(ev)
     except llm.LLMError as e:
         had_error = True
-        await emit({"stage": "error", "status": "error", "error": f"识别失败：{e}"})
+        error_msg = f"识别失败：{e}"
+        await emit({"stage": "error", "status": "error", "error": error_msg})
     except Exception as e:  # noqa: BLE001 — 兜底，避免任务悬挂
         had_error = True
-        await emit({"stage": "error", "status": "error", "error": f"服务异常：{e}"})
+        error_msg = f"服务异常：{e}"
+        await emit({"stage": "error", "status": "error", "error": error_msg})
     finally:
-        # 小程序任务收尾：成功先入历史库再扣费，失败不扣费。必须在 done=True 之前，
+        # 小程序任务收尾：成功先入历史库再扣费；失败也入库但不扣费。必须在 done=True 之前，
         # 保证「结果先进历史数据库，后返回到用户」。
         if job.get("wx"):
-            _finalize_wx_job(job, final_result, had_error)
+            _finalize_wx_job(job, final_result, had_error, error_msg)
         async with cond:
             job["done"] = True
             job["updated"] = time.time()
             cond.notify_all()
 
 
-def _finalize_wx_job(job: dict, result: dict | None, had_error: bool) -> None:
+def _finalize_wx_job(job: dict, result: dict | None, had_error: bool, error_msg: str = "") -> None:
     """小程序任务收尾（在后台任务内调用，幂等）：
 
-    - 失败 / 无结果 → 不入库、不扣费（保证「失败了没有结果入库就不扣次数」）。
+    - 失败 / 无结果 → **记一条失败历史**（含图片+错误，供用户查看/重试），但**不扣费**。
     - 成功 → **先**把图片+结果写入识别历史，**入库成功后再**扣 1 次额度
       （保证「结果进历史数据库的时候扣次数」「结果先进库后返回用户」）。
     """
@@ -161,10 +165,21 @@ def _finalize_wx_job(job: dict, result: dict | None, had_error: bool) -> None:
         return
     job["finalized"] = True
     openid = job.get("owner")
-    if not openid or had_error or not result:
-        return  # 失败/无结果：不入库不扣费
+    if not openid:
+        return
 
-    # 1) 先入历史库
+    if had_error or not result:
+        # 失败：记一条失败历史（含图片+错误），**不扣费**
+        try:
+            wxauth.add_history(openid, job.get("image_urls") or [], None, error=error_msg or "识别失败")
+            removed = wxauth.trim_history(openid)
+            _delete_upload_urls(removed)
+            job["history_saved"] = True
+        except Exception:  # noqa: BLE001 — 失败历史入库失败不影响流程
+            pass
+        return
+
+    # 成功：1) 先入历史库
     try:
         wxauth.add_history(openid, job.get("image_urls") or [], result)
         removed = wxauth.trim_history(openid)
