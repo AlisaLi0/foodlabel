@@ -124,10 +124,12 @@ Page({
       count: remain,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
-      sizeType: ['original'],
+      sizeType: ['compressed', 'original'],
       success: (res) => {
-        const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
-        if (!files.length) return;
+        const raw = res.tempFiles || [];
+        console.log('chooseMedia success 文件数=', raw.length, '大小=', raw.map((f) => f && f.size));
+        const files = raw.filter((f) => f && f.tempFilePath);
+        if (!files.length) { wx.showToast({ title: '未取到图片，请重试', icon: 'none' }); return; }
         const over = files.find((f) => f.size > 8 * 1024 * 1024);
         if (over) wx.showToast({ title: '已跳过过大图片（>8MB）', icon: 'none' });
         const add = files.filter((f) => f.size <= 8 * 1024 * 1024).map((f) => f.tempFilePath);
