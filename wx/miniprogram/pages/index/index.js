@@ -199,7 +199,12 @@ Page({
           });
           return;
         }
-        wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
+        // 其它未知失败：把真实 errMsg 显示出来，便于定位（不再笼统报"请重试"）
+        wx.showModal({
+          title: '选图失败',
+          content: (err && err.errMsg) || '未知错误',
+          showCancel: false, confirmText: '知道了',
+        });
       },
     });
   },
