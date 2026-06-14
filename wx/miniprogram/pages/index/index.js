@@ -147,7 +147,8 @@ Page({
         // 把结果暂存全局，结果页读取，避免超长 URL
         getApp().globalData.lastResult = r.result;
         getApp().globalData.lastImage = this.data.tempFilePath; // 本次上传的原图，结果页顶部展示
-        this.setData({ submitting: false, statusText: '' });
+        // 检查完成即清空已用图：返回首页时是空白选图态，「再查一张」需重新上传而非复查当前图
+        this.setData({ submitting: false, statusText: '', step: 0, tempFilePath: '' });
         this._recompute();
         this._refreshMe();
         wx.navigateTo({ url: '/pages/result/result' });
