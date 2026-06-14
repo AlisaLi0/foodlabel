@@ -28,7 +28,7 @@ Page({
     score: null,
     counts: '',
     catName: '',
-    previewImage: '',
+    previewImages: [],
     fingerprint: null,
     fields: [],
     nutrition: [],
@@ -45,8 +45,8 @@ Page({
       api.fetchHistoryDetail(options.hid).then((d) => {
         wx.hideLoading();
         if (d && d.result) {
-          const img = (d.images && d.images[0]) || '';
-          if (img) this.setData({ previewImage: img });
+          const imgs = Array.isArray(d.images) ? d.images.filter(Boolean) : [];
+          if (imgs.length) this.setData({ previewImages: imgs });
           this._render(d.result);
         } else {
           wx.showToast({ title: '历史不存在', icon: 'none' });
@@ -65,8 +65,10 @@ Page({
       setTimeout(() => wx.navigateBack(), 1200);
       return;
     }
-    const localImg = (getApp().globalData && getApp().globalData.lastImage) || '';
-    if (localImg) this.setData({ previewImage: localImg });
+    const gd = getApp().globalData || {};
+    const localImgs = Array.isArray(gd.lastImages) ? gd.lastImages.filter(Boolean)
+      : (gd.lastImage ? [gd.lastImage] : []);
+    if (localImgs.length) this.setData({ previewImages: localImgs });
     this._render(r);
   },
 
@@ -129,10 +131,11 @@ Page({
 
   onBack() { wx.navigateBack(); },
 
-  onPreviewImage() {
-    if (this.data.previewImage) {
-      wx.previewImage({ urls: [this.data.previewImage], current: this.data.previewImage });
-    }
+  onPreviewImage(e) {
+    const imgs = this.data.previewImages || [];
+    if (!imgs.length) return;
+    const cur = (e && e.currentTarget && e.currentTarget.dataset.url) || imgs[0];
+    wx.previewImage({ urls: imgs, current: cur });
   },
 
   onShareAppMessage() {

@@ -252,7 +252,9 @@ Page({
         // 成功：结果已入库。清除持久化任务，跳结果页。
         clearActiveJob();
         getApp().globalData.lastResult = r.result;
-        getApp().globalData.lastImage = (this.data.tempFilePaths[0] || (this._activePaths || [])[0]) || '';
+        const usedImgs = (this.data.tempFilePaths.length ? this.data.tempFilePaths : (this._activePaths || [])).slice(0, 3);
+        getApp().globalData.lastImages = usedImgs; // 本次上传的全部原图，结果页顶部展示
+        getApp().globalData.lastImage = usedImgs[0] || ''; // 兼容旧字段
         // 检查完成即清空已用图：返回首页是空白选图态，「再查一张」需重新上传
         this.setData({ submitting: false, statusText: '', step: 0, tempFilePaths: [] });
         this._activePaths = [];

@@ -1,7 +1,7 @@
 <view class="page" wx:if="{{verdict}}">
   <!-- 原图预览（点击全屏查看）-->
-  <view wx:if="{{previewImage}}" class="preview-wrap">
-    <image class="preview-img" src="{{previewImage}}" mode="widthFix" bindtap="onPreviewImage" />
+  <view wx:if="{{previewImages.length}}" class="preview-wrap">
+    <image wx:for="{{previewImages}}" wx:key="*this" class="preview-img" src="{{item}}" mode="widthFix" data-url="{{item}}" bindtap="onPreviewImage" />
   </view>
 
   <!-- 结论 -->
