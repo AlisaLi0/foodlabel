@@ -161,30 +161,52 @@ Page({
       wx.showToast({ title: '最多 3 张', icon: 'none' });
       return;
     }
+    const merge = (paths) => {
+      const list = this.data.tempFilePaths.concat(paths).slice(0, 3);
+      this.setData({ tempFilePaths: list, statusText: '' });
+      this._recompute();
+    };
+    const filterBig = (items) => {
+      const ok = items.filter((it) => !it.size || it.size <= 8 * 1024 * 1024);
+      if (items.length && ok.length < items.length) {
+        wx.showToast({ title: '已跳过过大图片（>8MB）', icon: 'none' });
+      }
+      return ok.map((it) => it.path);
+    };
+    // 旧版 chooseImage 兜底：部分机型（尤其华为鸿蒙）chooseMedia 会裸 fail，
+    // 旧 API 兼容性更好。chooseMedia 正常时这里永不触发。
+    const fallbackChooseImage = () => {
+      wx.chooseImage({
+        count: remain,
+        sizeType: ['compressed', 'original'],
+        sourceType: ['album', 'camera'],
+        success: (res) => {
+          const paths = res.tempFilePaths || [];
+          const files = res.tempFiles || [];
+          merge(filterBig(paths.map((p, i) => ({ path: p, size: files[i] && files[i].size }))));
+        },
+        fail: (err) => {
+          const m = (err && err.errMsg) || '';
+          if (m.indexOf('cancel') !== -1) return;
+          wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
+        },
+      });
+    };
     wx.chooseMedia({
       count: remain,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
-      sizeType: ['original'],
+      sizeType: ['compressed', 'original'],
       success: (res) => {
         const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
         if (!files.length) return;
-        const over = files.find((f) => f.size > 8 * 1024 * 1024);
-        if (over) wx.showToast({ title: '已跳过过大图片（>8MB）', icon: 'none' });
-        const add = files.filter((f) => f.size <= 8 * 1024 * 1024).map((f) => f.tempFilePath);
-        const paths = this.data.tempFilePaths.concat(add).slice(0, 3);
-        this.setData({ tempFilePaths: paths, statusText: '' });
-        this._recompute();
+        merge(filterBig(files.map((f) => ({ path: f.tempFilePath, size: f.size }))));
       },
       fail: (err) => {
         const msg = (err && err.errMsg) || '';
         if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-        console.error('chooseMedia fail:', JSON.stringify(err));
-        wx.showModal({
-          title: '选图失败（真实错误）',
-          content: msg || '未知错误',
-          showCancel: false, confirmText: '知道了',
-        });
+        // chooseMedia 裸 fail（常见于鸿蒙机型），回退旧版 chooseImage 再试一次
+        fallbackChooseImage();
       },
     });
   },
