@@ -184,18 +184,9 @@ Page({
       this.setData({ tempFilePaths: list, statusText: '' });
       this._recompute();
     };
-    const onFail = (err) => {
-      const msg = (err && err.errMsg) || '';
-      if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-      console.error('选图失败:', JSON.stringify(err));
-      wx.showModal({
-        title: '选图失败（真实错误）',
-        content: (msg || '未知错误') + '\n平台:' + (this._isHarmony ? 'ohos' : 'other'),
-        showCancel: false, confirmText: '知道了',
-      });
-    };
-    if (this._isHarmony) {
-      // 鸿蒙：旧版 chooseImage 兼容性更好
+    // 实测：已有图后再加时，首次调用常裸 fail，重试一次就成功（原生选择面板
+    // 未及时就绪）。所以 fail 后自动重试一次，用户无感知；重试仍败才提示。
+    const pick = (isRetry) => {
       wx.chooseImage({
         count: remain,
         sizeType: ['compressed', 'original'],
@@ -205,22 +196,15 @@ Page({
           const files = res.tempFiles || [];
           merge(paths.map((p, i) => ({ path: p, size: files[i] && files[i].size })));
         },
-        fail: onFail,
-      });
-    } else {
-      // 其它平台：功能更全的 chooseMedia
-      wx.chooseMedia({
-        count: remain,
-        mediaType: ['image'],
-        sourceType: ['album', 'camera'],
-        sizeType: ['compressed', 'original'],
-        success: (res) => {
-          const files = (res.tempFiles || []).filter((f) => f && f.tempFilePath);
-          merge(files.map((f) => ({ path: f.tempFilePath, size: f.size })));
+        fail: (err) => {
+          const msg = (err && err.errMsg) || '';
+          if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
+          if (!isRetry) { setTimeout(() => pick(true), 350); return; } // 首次裸 fail，自动重试
+          wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
         },
-        fail: onFail,
       });
-    }
+    };
+    pick(false);
   },
 
   onRemoveImage(e) {
