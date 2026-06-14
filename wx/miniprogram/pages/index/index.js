@@ -135,6 +135,7 @@ Page({
         this.setData({ tempFilePaths: paths, statusText: '' });
         this._recompute();
       },
+      fail: (err) => { console.error('chooseMedia fail errno=', err && err.errno, err && err.errMsg); },
     });
   },
 
