@@ -179,7 +179,12 @@ Page({
       fail: (err) => {
         const msg = (err && err.errMsg) || '';
         if (msg.indexOf('cancel') !== -1) return; // 用户主动取消，不提示
-        wx.showToast({ title: '打开相册失败，请重试', icon: 'none', duration: 2000 });
+        console.error('chooseMedia fail:', JSON.stringify(err));
+        wx.showModal({
+          title: '选图失败（真实错误）',
+          content: msg || '未知错误',
+          showCancel: false, confirmText: '知道了',
+        });
       },
     });
   },
