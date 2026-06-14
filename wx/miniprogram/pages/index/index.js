@@ -30,6 +30,7 @@ Page({
     canSubmit: false,
     showPrivacy: false,
     privacyContractName: '',
+    history: [],
   },
 
   onLoad() {
@@ -55,6 +56,53 @@ Page({
   onShow() {
     this._refreshMe();
     this._resumeJob();
+    this._loadHistory();
+  },
+
+  // 拉取识别历史（处理成功/处理失败）；「处理中」由 submitting 状态在顶部展示。
+  _loadHistory() {
+    api.fetchHistory().then((res) => {
+      const items = (res.items || []).map((x) => {
+        const failed = x.verdict === 'failed';
+        return {
+          id: x.id,
+          thumb: x.thumb || '',
+          name: failed ? '识别失败' : (x.food_name || '未识读到名称'),
+          state: failed ? 'failed' : 'success',
+          stateText: failed ? '处理失败' : '处理成功',
+          timeText: this._fmtTime(x.ts),
+        };
+      });
+      this.setData({ history: items });
+    }).catch(() => { /* 未登录/网络异常：留空 */ });
+  },
+
+  _fmtTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts * 1000);
+    const p = (n) => (n < 10 ? '0' + n : '' + n);
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  },
+
+  // 点历史条目：成功→开结果页；失败→提示重传重试（未扣次数）
+  onOpenHistory(e) {
+    const id = e.currentTarget.dataset.id;
+    const state = e.currentTarget.dataset.state;
+    if (!id) return;
+    if (state === 'failed') {
+      wx.showModal({
+        title: '该次识别失败',
+        content: '这次检查未成功（未扣次数）。可在上方重新上传重试。',
+        showCancel: false, confirmText: '知道了',
+      });
+      return;
+    }
+    wx.navigateTo({ url: '/pages/result/result?hid=' + id });
+  },
+
+  // 点「处理中」条目：提示稍候
+  onTapProcessing() {
+    wx.showToast({ title: '正在检查，请稍候', icon: 'none' });
   },
 
   // 刷新/重启/返回首页时，若有未完成的检查任务则恢复「正在处理」状态并续轮询。
@@ -181,6 +229,7 @@ Page({
     });
     this._recompute();
     this._refreshMe();
+    this._loadHistory(); // 刷出刚记录的失败条目
   },
 
   // 轮询任务进度；完成后跳结果页，失败则保留图片可重试

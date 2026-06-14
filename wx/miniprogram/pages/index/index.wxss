@@ -73,3 +73,18 @@
 .privacy-btn.reject { background: #f2f3f5; color: #666; }
 .privacy-btn.agree { background: var(--brand); color: #fff; }
 .privacy-btn::after { border: none; }
+
+/* 识别历史（首页内嵌，分 处理中/处理成功/处理失败） */
+.hist-h { font-size: 30rpx; font-weight: 700; margin-bottom: 16rpx; }
+.hist-item { display: flex; align-items: center; gap: 18rpx; padding: 16rpx 0; border-bottom: 1rpx solid #f0f1f3; }
+.hist-item:last-child { border-bottom: none; }
+.hist-thumb { width: 92rpx; height: 92rpx; border-radius: 10rpx; flex: none; background: #f2f3f5; }
+.hist-thumb-ph { display: flex; align-items: center; justify-content: center; font-size: 40rpx; color: #9aa0a6; }
+.hist-info { flex: 1; min-width: 0; }
+.hist-name { font-size: 28rpx; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hist-meta { margin-top: 8rpx; display: flex; align-items: center; gap: 14rpx; }
+.hist-state { font-size: 22rpx; padding: 2rpx 14rpx; border-radius: 999rpx; }
+.hist-state.s-processing { background: #eef4ff; color: #2079db; }
+.hist-state.s-success { background: #e7f6ec; color: #1a7f37; }
+.hist-state.s-failed { background: #fdecea; color: #c2362f; }
+.hist-time { font-size: 22rpx; }

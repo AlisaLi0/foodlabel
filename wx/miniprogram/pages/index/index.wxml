@@ -35,6 +35,34 @@
     <view class="credits muted" wx:if="{{credits !== null}}">剩余免费次数：{{credits}}</view>
   </view>
 
+  <!-- 识别历史：处理中 / 处理成功 / 处理失败 -->
+  <view wx:if="{{submitting || history.length}}" class="card hist">
+    <view class="hist-h">识别历史</view>
+
+    <!-- 处理中：当前正在跑的任务（本地状态） -->
+    <view wx:if="{{submitting}}" class="hist-item" bindtap="onTapProcessing">
+      <view class="hist-thumb hist-thumb-ph">⏳</view>
+      <view class="hist-info">
+        <view class="hist-name">正在检查…</view>
+        <view class="hist-meta"><text class="hist-state s-processing">处理中</text></view>
+      </view>
+    </view>
+
+    <!-- 已完成：处理成功 / 处理失败 -->
+    <view wx:for="{{history}}" wx:key="id" class="hist-item"
+          data-id="{{item.id}}" data-state="{{item.state}}" bindtap="onOpenHistory">
+      <image wx:if="{{item.thumb}}" class="hist-thumb" src="{{item.thumb}}" mode="aspectFill" />
+      <view wx:else class="hist-thumb hist-thumb-ph">文</view>
+      <view class="hist-info">
+        <view class="hist-name">{{item.name}}</view>
+        <view class="hist-meta">
+          <text class="hist-state s-{{item.state}}">{{item.stateText}}</text>
+          <text class="hist-time muted">{{item.timeText}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
   <view class="card tips">
     <view class="tips-title">说明</view>
     <view class="muted tips-line">· 结果对照现行国家标准自动生成，仅供参考，不构成监管结论或法律意见。</view>
