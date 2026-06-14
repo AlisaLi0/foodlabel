@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 import time
@@ -227,6 +228,17 @@ async def _read_uploads(request: Request) -> list[tuple[bytes, str | None, str |
     for up in uploads:
         raw = await up.read()
         items.append((raw, (up.content_type or "").lower() or None, up.filename or None))
+    # 小程序变通：wx.uploadFile 单请求只能带一个文件，额外图片以 base64 放在
+    # image_b64_* 表单字段里一并送来；这里解码后并入图片项。
+    for key in sorted({k for k in form.keys() if k.startswith("image_b64")}):
+        for val in form.getlist(key):
+            if isinstance(val, str) and val:
+                try:
+                    raw = base64.b64decode(val)
+                except Exception:  # noqa: BLE001 — 单张解码失败跳过，不影响其它
+                    continue
+                if raw:
+                    items.append((raw, "image/jpeg", key + ".jpg"))
     return items
 
 

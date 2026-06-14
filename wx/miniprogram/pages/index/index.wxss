@@ -8,7 +8,26 @@
 }
 .picker-plus { font-size: 72rpx; color: var(--brand); line-height: 1; }
 .picker-text { margin-top: 14rpx; font-size: 30rpx; }
-.picker-hint { margin-top: 8rpx; font-size: 24rpx; }
+.picker-hint { margin-top: 16rpx; font-size: 24rpx; text-align: center; }
+
+/* 多图缩略图网格（最多 3 张 + 添加格） */
+.thumbs { display: flex; flex-wrap: wrap; gap: 18rpx; }
+.thumb {
+  position: relative; width: 210rpx; height: 210rpx; border-radius: 14rpx;
+  overflow: hidden; background: #fafafa;
+}
+.thumb-img { width: 100%; height: 100%; display: block; }
+.thumb-remove {
+  position: absolute; top: 6rpx; right: 6rpx; width: 44rpx; height: 44rpx;
+  border-radius: 50%; background: rgba(0,0,0,.55); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 34rpx; line-height: 1;
+}
+.thumb-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 2rpx dashed var(--line);
+}
+.thumb-add .picker-plus { font-size: 56rpx; }
+.thumb-add-text { margin-top: 6rpx; font-size: 22rpx; }
 
 .preview { position: relative; }
 .preview-img { width: 100%; border-radius: 14rpx; display: block; }

@@ -80,7 +80,7 @@ function isDocFile(file) {
 
 function addFiles(list) {
   for (const file of list) {
-    if (files.length >= 4) break;
+    if (files.length >= 3) break;
     if (file.type && file.type.startsWith("image/")) {
       files.push({ file, url: URL.createObjectURL(file), kind: "image" });
     } else if (isDocFile(file)) {

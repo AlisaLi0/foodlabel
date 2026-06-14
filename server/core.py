@@ -35,7 +35,7 @@ from .standards import (
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp"}
 # 图片扩展名，用于浏览器/客户端未带 content-type 时按文件名兜底判定。
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
-DEFAULT_MAX_IMAGES = 4
+DEFAULT_MAX_IMAGES = 3
 DEFAULT_MAX_DOCS = 4
 DEFAULT_MAX_BYTES = 8 * 1024 * 1024
 

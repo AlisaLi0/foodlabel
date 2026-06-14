@@ -6,16 +6,17 @@
   </view>
 
   <view class="card">
-    <view wx:if="{{!tempFilePath}}" class="picker" bindtap="onChooseImage">
-      <view class="picker-plus">＋</view>
-      <view class="picker-text">选择 / 拍摄标签照片</view>
-      <view class="muted picker-hint">支持 JPG / PNG / WebP，单张 ≤ 8MB</view>
+    <view class="thumbs">
+      <view wx:for="{{tempFilePaths}}" wx:key="*this" class="thumb">
+        <image class="thumb-img" src="{{item}}" mode="aspectFill" />
+        <view wx:if="{{!submitting}}" class="thumb-remove" data-idx="{{index}}" catchtap="onRemoveImage">×</view>
+      </view>
+      <view wx:if="{{tempFilePaths.length < 3 && !submitting}}" class="thumb thumb-add" bindtap="onChooseImage">
+        <view class="picker-plus">＋</view>
+        <view class="muted thumb-add-text">{{tempFilePaths.length ? '继续添加' : '选择 / 拍摄'}}</view>
+      </view>
     </view>
-
-    <view wx:else class="preview">
-      <image class="preview-img" src="{{tempFilePath}}" mode="widthFix" />
-      <view wx:if="{{!submitting}}" class="preview-remove" bindtap="onRemoveImage">×</view>
-    </view>
+    <view wx:if="{{!tempFilePaths.length}}" class="muted picker-hint">最多 3 张，JPG / PNG / WebP，单张 ≤ 8MB</view>
 
     <view wx:if="{{submitting}}" class="steps">
       <view wx:for="{{stepLabels}}" wx:key="*this"

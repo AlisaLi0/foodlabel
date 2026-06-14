@@ -47,14 +47,20 @@ function claimShareReward() { return request('/api/wx/share-reward', { method: '
 // 上传图片起检查任务，返回 { job_id, credits }
 function startCheck(tempFilePaths) {
   const tok = getToken();
-  const paths = Array.isArray(tempFilePaths) ? tempFilePaths : [tempFilePaths];
-  // wx.uploadFile 一次只能传一个文件字段；多图时分多次不便，这里用第一张主图。
-  // 食品标签通常一张即可；如需多图，后端 images 支持多份，可改造为分片合并。
+  const paths = (Array.isArray(tempFilePaths) ? tempFilePaths : [tempFilePaths]).filter(Boolean).slice(0, 3);
+  // wx.uploadFile 单请求只能带一个文件：第一张走 multipart 文件字段 images，
+  // 其余最多 2 张读成 base64 放进 formData 的 image_b64_* 字段，后端解码合并。
+  const formData = {};
+  const fs = wx.getFileSystemManager();
+  paths.slice(1).forEach((p, i) => {
+    try { formData['image_b64_' + (i + 1)] = fs.readFileSync(p, 'base64'); } catch (e) { /* 读失败跳过该张 */ }
+  });
   return new Promise((resolve, reject) => {
     wx.uploadFile({
       url: API_BASE + '/api/wx/check',
       filePath: paths[0],
       name: 'images',
+      formData,
       header: { Authorization: 'Bearer ' + tok },
       timeout: 60000,
       success: (res) => {
