@@ -108,9 +108,16 @@ def _gc_jobs() -> None:
 
 
 async def _run_job(job_id: str, data_urls: list[str], doc_text: str = "") -> None:
-    """后台跑分步分析，把事件追加进任务缓冲；与请求连接解耦，断线不影响。"""
+    """后台跑分步分析，把事件追加进任务缓冲；与请求连接解耦，断线不影响。
+
+    对小程序任务（job["wx"]）：分析跑完后**在标记 done 之前**收尾——
+    成功(有结果)则「先入历史库、再扣次数」；失败(无结果)则不入库不扣费。
+    收尾在后台完成，不依赖客户端轮询，故切页/退出也会查完、入库、扣费。
+    """
     job = _JOBS[job_id]
     cond: asyncio.Condition = job["cond"]
+    final_result: dict | None = None
+    had_error = False
 
     async def emit(ev: dict) -> None:
         async with cond:
@@ -120,16 +127,55 @@ async def _run_job(job_id: str, data_urls: list[str], doc_text: str = "") -> Non
 
     try:
         async for ev in core.analyze_steps(data_urls, doc_text):
+            if ev.get("stage") == "done" and ev.get("status") == "done":
+                final_result = ev.get("result")
+            elif ev.get("stage") == "error":
+                had_error = True
             await emit(ev)
     except llm.LLMError as e:
+        had_error = True
         await emit({"stage": "error", "status": "error", "error": f"识别失败：{e}"})
     except Exception as e:  # noqa: BLE001 — 兜底，避免任务悬挂
+        had_error = True
         await emit({"stage": "error", "status": "error", "error": f"服务异常：{e}"})
     finally:
+        # 小程序任务收尾：成功先入历史库再扣费，失败不扣费。必须在 done=True 之前，
+        # 保证「结果先进历史数据库，后返回到用户」。
+        if job.get("wx"):
+            _finalize_wx_job(job, final_result, had_error)
         async with cond:
             job["done"] = True
             job["updated"] = time.time()
             cond.notify_all()
+
+
+def _finalize_wx_job(job: dict, result: dict | None, had_error: bool) -> None:
+    """小程序任务收尾（在后台任务内调用，幂等）：
+
+    - 失败 / 无结果 → 不入库、不扣费（保证「失败了没有结果入库就不扣次数」）。
+    - 成功 → **先**把图片+结果写入识别历史，**入库成功后再**扣 1 次额度
+      （保证「结果进历史数据库的时候扣次数」「结果先进库后返回用户」）。
+    """
+    if job.get("finalized"):
+        return
+    job["finalized"] = True
+    openid = job.get("owner")
+    if not openid or had_error or not result:
+        return  # 失败/无结果：不入库不扣费
+
+    # 1) 先入历史库
+    try:
+        wxauth.add_history(openid, job.get("image_urls") or [], result)
+        removed = wxauth.trim_history(openid)
+        _delete_upload_urls(removed)
+        job["history_saved"] = True
+    except Exception:  # noqa: BLE001 — 入库失败则不扣费（结果没进库）
+        return
+
+    # 2) 入库成功后才扣费
+    balance = wxauth.deduct(openid, job.get("cost", wxauth.COST_PER_CHECK), "check")
+    job["credited"] = True
+    job["final_credits"] = balance
 
 
 @app.get("/api/health")
@@ -433,11 +479,16 @@ async def wx_share_reward(request: Request) -> JSONResponse:
 
 @app.post("/api/wx/check")
 async def wx_check(request: Request) -> JSONResponse:
-    """小程序上传图片起检查任务：扣额度 → 起后台任务 → 返回 job_id。结果走 /api/wx/result 轮询。"""
+    """小程序上传图片起检查任务：校验余额够 → 起后台任务 → 返回 job_id。
+
+    **不在此处预扣额度**：后台任务跑完、结果成功入历史库后才扣 1 次
+    （见 _finalize_wx_job）。失败则不入库、不扣费。结果走 /api/wx/result 轮询，
+    但即使客户端切页/退出，后台也会把结果入库并扣费，下次打开可在历史中找到。
+    """
     openid, err = _wx_guard(request)
     if err:
         return err
-    wxauth.ensure_user(openid)
+    user = wxauth.ensure_user(openid)
 
     items = await _read_uploads(request)
     try:
@@ -451,28 +502,31 @@ async def wx_check(request: Request) -> JSONResponse:
         if not allowed:
             return JSONResponse({"error": "上传内容包含违规信息，已拒绝。"}, status_code=400)
 
+    # 余额不足直接拒绝（不起任务、不扣费）。扣费推迟到结果入库时。
+    if int(user.get("credits", 0)) < wxauth.COST_PER_CHECK:
+        return JSONResponse(
+            {"error": "免费次数已用完，请明天再来或分享获取。", "credits": user.get("credits", 0)},
+            status_code=402,
+        )
+
     # 内容安全：用户上传的图片落盘成公网 URL 后异步送检（media_check_async）。
     # 同一批落盘图片同时用于「识别历史」保存原图。异步——不阻塞本次检查。
     saved = await _persist_images(items)
     image_urls = [u for u, _p in saved]
     await _submit_images_seccheck(image_urls, openid)
 
-    balance = wxauth.deduct(openid, wxauth.COST_PER_CHECK, "check")
-    if balance is None:
-        return JSONResponse(
-            {"error": "免费次数已用完，请明天再来或分享获取。", "credits": 0}, status_code=402
-        )
-
     _gc_jobs()
     job_id = uuid.uuid4().hex
     _JOBS[job_id] = {
-        "events": [], "done": False, "owner": openid,
+        "events": [], "done": False, "owner": openid, "wx": True,
+        "cost": wxauth.COST_PER_CHECK,
         "image_urls": image_urls, "history_saved": False,
+        "credited": False, "final_credits": None, "finalized": False,
         "created": time.time(), "updated": time.time(),
         "cond": asyncio.Condition(),
     }
     asyncio.create_task(_run_job(job_id, data_urls, doc_text))
-    return JSONResponse({"job_id": job_id, "credits": balance})
+    return JSONResponse({"job_id": job_id, "credits": user.get("credits", 0)})
 
 
 @app.get("/api/wx/result")
@@ -505,26 +559,14 @@ async def wx_result(request: Request) -> JSONResponse:
         elif st == "done" and status == "done":
             result = e.get("result")
 
-    # 检查整体失败：退还本次扣费（仅退一次）。
-    if error and not job.get("refunded"):
-        job["refunded"] = True
-        wxauth.refund(openid, wxauth.COST_PER_CHECK, "check_failed")
-
-    # 检查成功完成：把图片+结果存入识别历史（仅一次）。失败/出错不存。
-    if result and not error and not job.get("history_saved"):
-        job["history_saved"] = True
-        try:
-            wxauth.add_history(openid, job.get("image_urls") or [], result)
-            removed = wxauth.trim_history(openid)
-            _delete_upload_urls(removed)
-        except Exception:  # noqa: BLE001 — 历史保存失败不影响结果返回
-            pass
-
+    # 退费/历史入库/扣费均在后台任务 _finalize_wx_job 完成（不依赖轮询）。
+    # 这里只读状态回传；扣费后的最新余额随结果一并返回，便于客户端刷新显示。
     step = max([e.get("step", 0) for e in events if e.get("status") == "done"], default=0)
-    return JSONResponse(
-        {"done": bool(job["done"]), "step": step, "extract": extract,
-         "rules": rules, "result": result, "error": error}
-    )
+    resp = {"done": bool(job["done"]), "step": step, "extract": extract,
+            "rules": rules, "result": result, "error": error}
+    if job.get("final_credits") is not None:
+        resp["credits"] = job["final_credits"]
+    return JSONResponse(resp)
 
 
 # ───────────────────────────── 小程序识别历史（图片+结果存服务器，可删除）─────────────────────────────
